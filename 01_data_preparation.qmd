@@ -1,0 +1,137 @@
+---
+title: 01 Data preparation
+date: 2024-05-12
+---
+
+```{r}
+packages <- c("readr","xts","tidyverse")
+
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+# Loading data
+
+```{r}
+library(readr)
+sp500 <- read_csv("data/^spx_d.csv", col_types = cols(Data = col_date(format = "%Y-%m-%d")))
+SP_prices <- as.xts(sp500$Zamkniecie,order.by = sp500$Data)
+
+eur_usd <- read_csv("data/eurusd_d.csv", col_types = cols(Data = col_date(format = "%Y-%m-%d")))
+EURUSD_prices <- as.xts(eur_usd$Zamkniecie,order.by = eur_usd$Data)
+
+nvda <- read_csv("data/nvda_us_d.csv", col_types = cols(Data = col_date(format = "%Y-%m-%d")))
+NVDA_prices <- as.xts(nvda$Zamkniecie,order.by = nvda$Data)
+
+cc <- read_csv("data/CC=F.csv", col_types = cols(Date = col_date()))
+CC_prices <- as.xts(cc["Adj Close"],order.by = cc$Date)
+names(CC_prices) <- "CC_prices"
+
+xrp <- read_csv("data/xrp_v_d.csv", col_types = cols(Data = col_date(format = "%Y-%m-%d")))
+XRP_prices <- as.xts(xrp$Zamkniecie,order.by = xrp$Data)
+
+merged <- cbind(SP_prices,EURUSD_prices,NVDA_prices,CC_prices,XRP_prices)
+```
+
+# Data investigation
+
+```{r}
+head(merged)
+tail(merged)
+
+merged |> summary()
+```
+
+# Missing data
+
+We can notice that on holidays XRP - cryptocurrency is quoted/traded, but the rest is not. We could assume that we will have missing values for bank holidays (NVDA and SP500 US bank holidays). In such cases there is no change in price. Filling NANs with previous observations might affect our index by artificialy lowering our volatility. We decided not to model those days, our analysis will be performed only on actual trading days.
+
+```{r}
+merged <- na.omit(merged)
+merged |> summary()
+```
+# Returns
+```{r}
+# Simple net returns
+
+merged$SP_SimReturns <- (merged$SP_prices/lag(merged$SP_prices)) - 1
+merged$NVDA_SimReturns <- (merged$NVDA_prices/lag(merged$NVDA_prices)) - 1
+merged$EURUSD_SimReturns <- (merged$EURUSD_prices/lag(merged$EURUSD_prices)) - 1
+merged$CC_SimReturns <- (merged$CC_prices/lag(merged$CC_prices)) -1  
+merged$XRP_SimReturns <- (merged$XRP_prices/lag(merged$XRP_prices)) - 1
+
+# Log returns
+
+merged$SP_LnReturns <- log(merged$SP_prices/lag(merged$SP_prices))
+merged$NVDA_LnReturns <- log(merged$NVDA_prices/lag(merged$NVDA_prices))
+merged$EURUSD_LnReturns <- log(merged$EURUSD_prices/lag(merged$EURUSD_prices))
+merged$CC_LnReturns <- log(merged$CC_prices/lag(merged$CC_prices))
+merged$XRP_LnReturns <- log(merged$XRP_prices/lag(merged$XRP_prices))
+
+merged$SP_LnReturns[1] <- 0
+merged$NVDA_LnReturns[1] <- 0
+merged$EURUSD_LnReturns[1] <- 0
+merged$CC_LnReturns[1] <- 0
+merged$XRP_LnReturns[1] <- 0
+
+# Cumulative returns
+
+merged$SP_CulReturns <- exp(cumsum(merged$SP_LnReturns))
+merged$NVDA_CulReturns <- exp(cumsum(merged$NVDA_LnReturns))
+merged$CC_CulReturns <- exp(cumsum(merged$CC_LnReturns))
+merged$EURUSD_CulReturns <- exp(cumsum(merged$EURUSD_LnReturns))
+merged$XRP_CulReturns <- exp(cumsum(merged$XRP_LnReturns))
+```
+
+# Index creation
+
+Index returns are sum of equally weighted components returns 
+
+```{r}
+
+SNEUCX_index <-xts(order.by = index(merged))
+
+SNEUCX_index$index_SimReturns = (merged$SP_SimReturns + merged$NVDA_SimReturns + 
+                                  merged$EURUSD_SimReturns + merged$CC_SimReturns +
+                                  merged$XRP_SimReturns)/5
+
+SNEUCX_index$index_SimReturns["2019-01-02"] <- 0
+
+SNEUCX_index$index_Sim_Gross_Returns <- SNEUCX_index$index_SimReturns + 1
+
+SNEUCX_index$index_value <- cumprod(SNEUCX_index$index_Sim_Gross_Returns)
+
+SNEUCX_index$LnReturns <- SNEUCX_index$index_value/lag(SNEUCX_index$index_value)
+```
+
+# Plots
+
+```{r}
+
+ggplot() +
+  geom_line(aes(x = index(merged), y = merged$SP_CulReturns)) + 
+  geom_line(aes(x = index(merged), y = merged$NVDA_CulReturns)) + 
+  geom_line(aes(x = index(merged), y = merged$CC_CulReturns)) + 
+  geom_line(aes(x = index(merged), y = merged$EURUSD_CulReturns)) + 
+  geom_line(aes(x = index(merged), y = merged$XRP_CulReturns)) +
+  geom_line(aes(x = index(SNEUCX_index), y = SNEUCX_index$index_value), color = "red")
+
+```
+
+# Save index data
+
+```{r}
+# Train data
+
+saveRDS(SNEUCX_index["2019-01-01/2022-12-31",c("index_value","LnReturns")], 
+        file = "input/SNEUCX_train.rds")
+
+# Test data
+
+saveRDS(SNEUCX_index["2023-01-01/2023-12-31",c("index_value","LnReturns")], 
+        file = "input/SNEUCX_test.rds")
+```
