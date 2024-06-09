@@ -4,7 +4,7 @@ date: 2024-06-06
 ---
 
 ```{r}
-packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries")
+packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries", "moments")
 
 for (package in packages) {
   if (!require(package, character.only = TRUE)) {
@@ -17,16 +17,16 @@ for (package in packages) {
 Loading data
 
 ```{r}
-SEUCX_train <- read_rds("input/SEUCX_train.rds")
-SEUCX_test <- read_rds("input/SEUCX_test.rds")
+SNEUCX_train <- read_rds("input/SNEUCX_train.rds")
+SNEUCX_test <- read_rds("input/SNEUCX_test.rds")
 
-SEUCX <- rbind(SEUCX_train,SEUCX_test)
+SNEUCX <- rbind(SNEUCX_train,SNEUCX_test)
 ```
 
 # Index returns and cumulative returns
 
 ```{r}
-p1 = ggplot(fortify(SEUCX)) +
+p1 = ggplot(fortify(SNEUCX)) +
   geom_line(aes(x=Index, y=index_value), colour = 'black') +
   scale_x_date(date_labels = "%d %b %Y") +
   xlab("") +
@@ -34,22 +34,22 @@ p1 = ggplot(fortify(SEUCX)) +
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank()) +
-  ggtitle('SEUCX cumulative return') + 
+  ggtitle('SNEUCX cumulative return') + 
   theme_minimal()
 
-p2 = ggplot(fortify(SEUCX)) +
+p2 = ggplot(fortify(SNEUCX)) +
   geom_line(aes(x=Index, y=LnReturns), colour = 'red', linewidth = 0.6) +
   scale_x_date(date_labels = "%d %b %Y") +
   xlab("") +
   ylab("") +
-  ggtitle('SEUCX log returns') + scale_y_continuous(labels = scales::percent) + 
+  ggtitle('SNEUCX log returns') + scale_y_continuous(labels = scales::percent) + 
   theme_minimal()
 
 p1 / p2
 ```
 
 ```{r}
-ggplot(SEUCX) +
+ggplot(SNEUCX) +
   geom_line(aes(x=Index, y=index_value), colour = 'black') +
   scale_x_date(date_labels = "%d %b %Y") +
   geom_line(aes(x=Index, y=LnReturns/0.1), colour = 'red', linewidth = 0.3) + 
@@ -63,15 +63,15 @@ ggplot(SEUCX) +
 # Histogram of index
 
 ```{r}
-tibble(r = as.numeric(SEUCX$LnReturns)) %>%
+tibble(r = as.numeric(SNEUCX$LnReturns)) %>%
   ggplot(aes(r)) +
   geom_histogram(aes(y =..density..),
                  colour = "blue", 
                  fill = "lightblue",
                  bins = 100) +
   stat_function(fun = dnorm, 
-                args = list(mean = mean(SEUCX$LnReturns), 
-                            sd = sd(SEUCX$LnReturns)),
+                args = list(mean = mean(SNEUCX$LnReturns), 
+                            sd = sd(SNEUCX$LnReturns)),
                 colour = "red"
                 ) +
   theme_minimal() + 
@@ -87,13 +87,13 @@ tibble(r = as.numeric(SEUCX$LnReturns)) %>%
 # Distribution density
 
 ```{r}
-ggplot(fortify(SEUCX$LnReturns)) + 
+ggplot(fortify(SNEUCX$LnReturns)) + 
   stat_function(fun = dnorm, 
-                args = list(mean = mean(SEUCX$LnReturns), 
-                            sd = sd(SEUCX$LnReturns)),
+                args = list(mean = mean(SNEUCX$LnReturns), 
+                            sd = sd(SNEUCX$LnReturns)),
                 colour = "red") +
-  geom_area(stat = "function", fun = dnorm, args = list(mean = mean(SEUCX$LnReturns), 
-                            sd = sd(SEUCX$LnReturns)), fill = "red", alpha = 0.3) +
+  geom_area(stat = "function", fun = dnorm, args = list(mean = mean(SNEUCX$LnReturns), 
+                            sd = sd(SNEUCX$LnReturns)), fill = "red", alpha = 0.3) +
   geom_density(aes(x = LnReturns), colour = 'blue', fill = "lightblue", alpha = 0.3) +
   ylab('Density estimate') + 
   xlab('Log returns') +
@@ -104,7 +104,7 @@ ggplot(fortify(SEUCX$LnReturns)) +
 # Quantiles
 
 ```{r}
-ggplot(fortify(SEUCX$LnReturns)) + 
+ggplot(fortify(SNEUCX$LnReturns)) + 
   geom_qq_line(aes(sample = LnReturns), colour = 'red') +
   geom_qq(aes(sample = LnReturns), colour = 'black') +
   ylab('Sample Quantiles') + 
@@ -116,26 +116,26 @@ heavy tails
 # Basic statistics
 
 ```{r}
-ret_stats <- tibble(SEUCX_Log_Returns = as.numeric(SEUCX$LnReturns)) %>% 
-  summarise(Min = min(SEUCX_Log_Returns),
-            Quartile_1st = quantile(SEUCX_Log_Returns,0.25),
-            Median = median(SEUCX_Log_Returns),
-            Mean = mean(SEUCX_Log_Returns),
-            Quartile_3rd = quantile(SEUCX_Log_Returns,0.75),
-            Max = max(SEUCX_Log_Returns),
-            Skew = skewness(SEUCX_Log_Returns),
-            Kurtosis = kurtosis(SEUCX_Log_Returns) - 3,
-            Standard_error = sd(SEUCX_Log_Returns)/sqrt(length(SEUCX_Log_Returns)),
-            Standard_deviation = sd(SEUCX_Log_Returns))
+ret_stats <- tibble(SNEUCX_Log_Returns = as.numeric(SNEUCX$LnReturns)) %>% 
+  summarise(Min = min(SNEUCX_Log_Returns),
+            Quartile_1st = quantile(SNEUCX_Log_Returns,0.25),
+            Median = median(SNEUCX_Log_Returns),
+            Mean = mean(SNEUCX_Log_Returns),
+            Quartile_3rd = quantile(SNEUCX_Log_Returns,0.75),
+            Max = max(SNEUCX_Log_Returns),
+            Skew = skewness(SNEUCX_Log_Returns),
+            Kurtosis = kurtosis(SNEUCX_Log_Returns) - 3,
+            Standard_error = sd(SNEUCX_Log_Returns)/sqrt(length(SNEUCX_Log_Returns)),
+            Standard_deviation = sd(SNEUCX_Log_Returns))
 
-tibble(Statistics = colnames(ret_stats), SEUCX_Log_Returns = as.numeric(ret_stats)) %>% 
+tibble(Statistics = colnames(ret_stats), SNEUCX_Log_Returns = as.numeric(ret_stats)) %>% 
   datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe', width = 10) %>% 
-  formatRound(columns = c('SEUCX_Log_Returns'), digits = 4)
+  formatRound(columns = c('SNEUCX_Log_Returns'), digits = 4)
 ```
 
 # Normal distribution?
 
 ```{r}
-jarque.bera.test(SEUCX$LnReturns)
+jarque.bera.test(SNEUCX$LnReturns)
 ```
 # KASIA - interpretacja
