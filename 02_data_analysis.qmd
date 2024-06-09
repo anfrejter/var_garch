@@ -1,0 +1,141 @@
+---
+title: 02 Data Analysis
+date: 2024-06-06
+---
+
+```{r}
+packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries")
+
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+Loading data
+
+```{r}
+SEUCX_train <- read_rds("input/SEUCX_train.rds")
+SEUCX_test <- read_rds("input/SEUCX_test.rds")
+
+SEUCX <- rbind(SEUCX_train,SEUCX_test)
+```
+
+# Index returns and cumulative returns
+
+```{r}
+p1 = ggplot(fortify(SEUCX)) +
+  geom_line(aes(x=Index, y=index_value), colour = 'black') +
+  scale_x_date(date_labels = "%d %b %Y") +
+  xlab("") +
+  ylab("") + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  ggtitle('SEUCX cumulative return') + 
+  theme_minimal()
+
+p2 = ggplot(fortify(SEUCX)) +
+  geom_line(aes(x=Index, y=LnReturns), colour = 'red', linewidth = 0.6) +
+  scale_x_date(date_labels = "%d %b %Y") +
+  xlab("") +
+  ylab("") +
+  ggtitle('SEUCX log returns') + scale_y_continuous(labels = scales::percent) + 
+  theme_minimal()
+
+p1 / p2
+```
+
+```{r}
+ggplot(SEUCX) +
+  geom_line(aes(x=Index, y=index_value), colour = 'black') +
+  scale_x_date(date_labels = "%d %b %Y") +
+  geom_line(aes(x=Index, y=LnReturns/0.1), colour = 'red', linewidth = 0.3) + 
+  scale_y_continuous(
+    name = "Index value",
+    sec.axis = sec_axis(~.*0.1, name = "Log returns")
+  ) +
+  theme_minimal()
+```
+
+# Histogram of index
+
+```{r}
+tibble(r = as.numeric(SEUCX$LnReturns)) %>%
+  ggplot(aes(r)) +
+  geom_histogram(aes(y =..density..),
+                 colour = "blue", 
+                 fill = "lightblue",
+                 bins = 100) +
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(SEUCX$LnReturns), 
+                            sd = sd(SEUCX$LnReturns)),
+                colour = "red"
+                ) +
+  theme_minimal() + 
+  xlim(-0.15,0.15) + 
+  labs(
+    title = "Histogram of log returns", 
+    y = "Frequency", x = "Log returns",
+    caption = "Source: own calculations"
+  )
+```
+## Opis
+
+# Distribution density
+
+```{r}
+ggplot(fortify(SEUCX$LnReturns)) + 
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(SEUCX$LnReturns), 
+                            sd = sd(SEUCX$LnReturns)),
+                colour = "red") +
+  geom_area(stat = "function", fun = dnorm, args = list(mean = mean(SEUCX$LnReturns), 
+                            sd = sd(SEUCX$LnReturns)), fill = "red", alpha = 0.3) +
+  geom_density(aes(x = LnReturns), colour = 'blue', fill = "lightblue", alpha = 0.3) +
+  ylab('Density estimate') + 
+  xlab('Log returns') +
+  theme_minimal() + 
+  xlim(-0.15,0.15)
+```
+
+# Quantiles
+
+```{r}
+ggplot(fortify(SEUCX$LnReturns)) + 
+  geom_qq_line(aes(sample = LnReturns), colour = 'red') +
+  geom_qq(aes(sample = LnReturns), colour = 'black') +
+  ylab('Sample Quantiles') + 
+  xlab('Theoretical Quantiles')
+```
+## Opis
+heavy tails
+
+# Basic statistics
+
+```{r}
+ret_stats <- tibble(SEUCX_Log_Returns = as.numeric(SEUCX$LnReturns)) %>% 
+  summarise(Min = min(SEUCX_Log_Returns),
+            Quartile_1st = quantile(SEUCX_Log_Returns,0.25),
+            Median = median(SEUCX_Log_Returns),
+            Mean = mean(SEUCX_Log_Returns),
+            Quartile_3rd = quantile(SEUCX_Log_Returns,0.75),
+            Max = max(SEUCX_Log_Returns),
+            Skew = skewness(SEUCX_Log_Returns),
+            Kurtosis = kurtosis(SEUCX_Log_Returns) - 3,
+            Standard_error = sd(SEUCX_Log_Returns)/sqrt(length(SEUCX_Log_Returns)),
+            Standard_deviation = sd(SEUCX_Log_Returns))
+
+tibble(Statistics = colnames(ret_stats), SEUCX_Log_Returns = as.numeric(ret_stats)) %>% 
+  datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe', width = 10) %>% 
+  formatRound(columns = c('SEUCX_Log_Returns'), digits = 4)
+```
+
+# Normal distribution?
+
+```{r}
+jarque.bera.test(SEUCX$LnReturns)
+```
+# KASIA - interpretacja

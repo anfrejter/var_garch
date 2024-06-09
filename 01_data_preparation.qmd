@@ -1,6 +1,6 @@
 ---
 title: 01 Data preparation
-date: 2024-05-12
+date: 2024-06-04
 ---
 
 ```{r}
@@ -54,7 +54,9 @@ We can notice that on holidays XRP - cryptocurrency is quoted/traded, but the re
 merged <- na.omit(merged)
 merged |> summary()
 ```
+
 # Returns
+
 ```{r}
 # Simple net returns
 
@@ -89,37 +91,61 @@ merged$XRP_CulReturns <- exp(cumsum(merged$XRP_LnReturns))
 
 # Index creation
 
-Index returns are sum of equally weighted components returns 
+Index returns are sum of equally weighted components returns
+
+S - SP500
+E - EUR
+U - USD
+C - COCOA
+X - XRP
 
 ```{r}
 
-SNEUCX_index <-xts(order.by = index(merged))
+SEUCX_index <-xts(order.by = index(merged))
 
-SNEUCX_index$index_SimReturns = (merged$SP_SimReturns + merged$NVDA_SimReturns + 
+SEUCX_index$index_SimReturns = (merged$SP_SimReturns + merged$NVDA_SimReturns + 
                                   merged$EURUSD_SimReturns + merged$CC_SimReturns +
                                   merged$XRP_SimReturns)/5
 
-SNEUCX_index$index_SimReturns["2019-01-02"] <- 0
+SEUCX_index$index_SimReturns["2019-01-02"] <- 0
 
-SNEUCX_index$index_Sim_Gross_Returns <- SNEUCX_index$index_SimReturns + 1
+SEUCX_index$index_Sim_Gross_Returns <- SEUCX_index$index_SimReturns + 1
 
-SNEUCX_index$index_value <- cumprod(SNEUCX_index$index_Sim_Gross_Returns)
+SEUCX_index$index_value <- cumprod(SEUCX_index$index_Sim_Gross_Returns)
 
-SNEUCX_index$LnReturns <- SNEUCX_index$index_value/lag(SNEUCX_index$index_value)
+SEUCX_index$LnReturns <- log(SEUCX_index$index_value/lag(SEUCX_index$index_value))
+SEUCX_index$LnReturns[1] <- 0
 ```
 
 # Plots
 
 ```{r}
+cbind(merged$SP_CulReturns,merged$NVDA_CulReturns,merged$EURUSD_CulReturns, merged$XRP_CulReturns, SEUCX_index$index_value)
 
+ggplot(cbind(merged$SP_CulReturns,merged$NVDA_CulReturns,merged$EURUSD_CulReturns, merged$XRP_CulReturns, SEUCX_index$index_value)) +
+  geom_line(aes(x = Index, y = SP_CulReturns, color = "Linear"), alpha = 0.7) + 
+  scale_color_manual(name='Regression Model',
+                     breaks=c('Linear', 'Quadratic', 'Cubic'),
+                     values=c('Cubic'='pink', 'Quadratic'='blue', 'Linear'='purple'))
+```
+  
+```{r}
 ggplot() +
-  geom_line(aes(x = index(merged), y = merged$SP_CulReturns)) + 
-  geom_line(aes(x = index(merged), y = merged$NVDA_CulReturns)) + 
-  geom_line(aes(x = index(merged), y = merged$CC_CulReturns)) + 
-  geom_line(aes(x = index(merged), y = merged$EURUSD_CulReturns)) + 
-  geom_line(aes(x = index(merged), y = merged$XRP_CulReturns)) +
-  geom_line(aes(x = index(SNEUCX_index), y = SNEUCX_index$index_value), color = "red")
-
+  geom_line(aes(x = index(merged), y = merged$SP_CulReturns, color = "SP500"), alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), y = merged$NVDA_CulReturns, color = "NVDA"), alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), y = merged$CC_CulReturns, color = "Cocoa"), alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), y = merged$EURUSD_CulReturns, color = "EUR_USD"), alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), y = merged$XRP_CulReturns, color = "XRP"), alpha = 0.7, linetype="dashed") +
+  geom_line(aes(x = index(SEUCX_index), y = SEUCX_index$index_value, color = "SEUCX"),linewidth = 0.8) +
+  xlab("Date") +
+  ylab("Cumulative returns") +
+  ggtitle('Cumulative returns of index and index components') +
+  scale_x_date(date_labels = "%d %b %Y") +
+  theme_minimal() +
+  scale_color_manual(name='',
+                     breaks = c('SP500','NVDA','Cocoa','EUR_USD', 'XRP', 'SEUCX'),
+                     values = c('SP500'='darkgreen','NVDA'='blue', 'Cocoa' = 'brown', 'EUR_USD' = 'yellow', 'XRP' = 'black', 'SEUCX' = 'red')
+                     )
 ```
 
 # Save index data
@@ -127,11 +153,11 @@ ggplot() +
 ```{r}
 # Train data
 
-saveRDS(SNEUCX_index["2019-01-01/2022-12-31",c("index_value","LnReturns")], 
-        file = "input/SNEUCX_train.rds")
+saveRDS(SEUCX_index["2019-01-01/2022-12-31",c("index_value","LnReturns")], 
+        file = "input/SEUCX_train.rds")
 
 # Test data
 
-saveRDS(SNEUCX_index["2023-01-01/2023-12-31",c("index_value","LnReturns")], 
-        file = "input/SNEUCX_test.rds")
+saveRDS(SEUCX_index["2023-01-01/2023-12-31",c("index_value","LnReturns")], 
+        file = "input/SEUCX_test.rds")
 ```
