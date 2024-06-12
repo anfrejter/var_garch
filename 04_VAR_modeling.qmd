@@ -1,0 +1,363 @@
+---
+title: "04 VAR modeling"
+date: 2024-05-08
+title-block-banner: true
+format:
+  html:
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    toc-depth: 2
+    code-fold: true
+    self-contained: true
+---
+
+```{r}
+packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries", "stats", "forecast", "lmtest", "FinTS", "rugarch", "aTSA")
+
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+# Import models and data
+
+```{r}
+SNEUCX_train <- read_rds("input/SNEUCX_train.rds")
+SNEUCX_test <- read_rds("input/SNEUCX_test.rds")
+
+sGARCH_std_11 <- read_rds("models/sGARCH_std_11.rds")
+eGARCH_std_11 <- read_rds("models/eGARCH_std_11.rds")
+apARCH_std_11 <- read_rds("models/apARCH_std_11.rds")
+sGARCH_M_std_11 <- read_rds("models/sGARCH_M_std_11.rds")
+```
+
+# Empirical quantile
+
+```{r}
+q05 <- quantile(SNEUCX_train, 0.05)
+q01 <- quantile(SNEUCX_train, 0.01)
+ggplot() + 
+  geom_density(aes(x = SNEUCX_train$LnReturns),colour = 'blue', fill = "lightblue", alpha = 0.3) + 
+  geom_vline(aes(xintercept=q05),linetype="dashed", color = "red") +
+  geom_vline(aes(xintercept=q01),linetype="dashed", color = "darkred")
+```
+# VAR
+
+## In-Sample
+
+```{r}
+q05 <- quantile((SNEUCX_train$LnReturns - mean(SNEUCX_train$LnReturns, na.rm = T))/sd(SNEUCX_train$LnReturns ,na.rm = T), 0.05)
+q01 <- quantile((SNEUCX_train$LnReturns - mean(SNEUCX_train$LnReturns, na.rm = T))/sd(SNEUCX_train$LnReturns ,na.rm = T), 0.01)
+
+summary_in_sample <-c()
+for (i in c("sGARCH","eGARCH","apARCH","sGARCH_M")){
+  summary_in_sample <- rbind(summary_in_sample, c(paste0(i),sum(SNEUCX_train$LnReturns < SNEUCX_train[,paste0("VAR95_",i)]),
+  (sum(SNEUCX_train$LnReturns < SNEUCX_train[,paste0("VAR95_",i)]))/length(SNEUCX_train$LnReturns),
+  sum(SNEUCX_train$LnReturns < SNEUCX_train[,paste0("VAR99_",i)]),
+  (sum(SNEUCX_train$LnReturns < SNEUCX_train[,paste0("VAR99_",i)]))/length(SNEUCX_train$LnReturns)))
+}
+summary_in_sample <- as_tibble(summary_in_sample)
+colnames(summary_in_sample) <- c("model","n_below_VAR95_in","%_below_VAR95_in","n_below_VAR99_in","%_below_VAR99_in")
+summary_in_sample
+
+summary_in_sample %>% 
+  datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
+  formatPercentage(columns = c("%_below_VAR95_in","%_below_VAR99_in"), digits = 2)
+```
+
+
+```{r}
+scale = c(min(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M)
+          ,max(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M))
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH,color = "VAR95_sGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]), fill = "red",alpha = 0.5, shape = 1) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_eGARCH, color = "VAR95_eGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]), color = "blue",alpha = 0.5, shape = 2) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_apARCH, color = "VAR95_apARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]), color = "black",alpha = 0.5, shape = 5) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH_M, color = "VAR95_sGARCH_M"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]), color = "purple",alpha = 0.5, shape = 6) +
+  theme_minimal() +
+  theme(legend.position="top") + 
+  scale_color_manual(name='',
+                     breaks = c('VAR95_sGARCH','VAR95_eGARCH','VAR95_apARCH', 'VAR95_sGARCH_M'),
+                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'black', 'VAR95_sGARCH_M' = 'purple')
+                     ) +
+  ylim(scale) +
+  ylab("Log returns") +
+  xlab("Date") +
+  scale_x_date(date_labels = "%d %b %Y")
+```
+
+```{r}
+
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]
+),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]), color = "red",alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_sGARCH), color = "darkred", alpha = 0.7) +
+  theme_minimal() +
+  ylim(c(min(SNEUCX_train$VAR95_sGARCH),0))
+
+print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH))
+print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH))/length(SNEUCX_train$LnReturns))
+index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH])
+```
+```{r}
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]
+),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]), color = "red",alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_eGARCH), color = "darkred", alpha = 0.7) +
+  theme_minimal() +
+  ylim(c(min(SNEUCX_train$VAR95_eGARCH),0))
+
+print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH))
+print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH))/length(SNEUCX_train$LnReturns))
+index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH])
+```
+```{r}
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]
+),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]), color = "red",alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_apARCH), color = "darkred", alpha = 0.7) +
+  theme_minimal() +
+  ylim(c(min(SNEUCX_train$VAR95_apARCH),0))
+
+print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH))
+print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH))/length(SNEUCX_train$LnReturns))
+index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH])
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]
+),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]), color = "red",alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_sGARCH_M), color = "darkred", alpha = 0.7) +
+  theme_minimal() +
+  ylim(c(min(SNEUCX_train$VAR95_sGARCH_M),0))
+
+print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M))
+print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M))/length(SNEUCX_train$LnReturns))
+index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M])
+```
+
+## Out-of-Sample
+
+```{r}
+garch_forecast_expanding <- function(df,
+                           garch_model = "sGARCH",
+                           garch_order = c(1,1),
+                           distribution,
+                           start_date,
+                           end_date,
+                           arima_order = c(0,0),
+                           is_archm = FALSE,
+                           archpow = 0
+                           
+){
+  date_index <- index(df)
+  start_index <- which(date_index==start_date)-1
+  end_index <- which(date_index==end_date)-1
+  sigma_for<-c()
+  ret_for<-c()
+  q05<-c()
+  q01<-c()
+  spec <- ugarchspec(variance.model = list(garchOrder = c(garch_order,garch_order),
+                                           model = garch_model),
+                     mean.model = list(armaOrder = c(arima_order), archm = is_archm, archpow = archpow),
+                     distribution.model = distribution)
+  for (i in date_index[start_index:end_index]){
+    for_end = paste0("/",as.Date(i))
+    GARCH <- ugarchfit(spec = spec, data = df[for_end], solver = "hybrid")
+    forecastt <- ugarchforecast(GARCH,n.ahead = 1)
+    
+    sigma_for<- rbind(sigma_for,forecastt@forecast$sigmaFor[1, 1])
+    ret_for <- rbind(ret_for,forecastt@forecast$seriesFor[1, 1])
+    q05 <- c(q05,quantile((df[for_end] - mean(df[for_end], na.rm = T))/sd(df[for_end] ,na.rm = T), 0.05))
+    q01 <- c(q01,quantile((df[for_end] - mean(df[for_end], na.rm = T))/sd(df[for_end] ,na.rm = T), 0.01))
+  }
+  
+  out<-cbind(sigma_for,ret_for,q05,q01,date_index[(start_index+1):(end_index+1)])
+  colnames(out)<-c("sigma","return", "q05","q01","date")
+  out <- as_tibble(out)
+  out$date <- as.Date(out$date)
+  out <- as.xts(out[c("sigma","return", "q05","q01")], order.by = out$date)
+  out$var95 <- out$q05*out$sigma
+  out$var99 <- out$q01*out$sigma
+  return(out)
+}
+```
+
+```{r}
+time1 <- Sys.time()
+sGARCH_forecast <- garch_forecast_expanding(rbind(SNEUCX_train$LnReturns,SNEUCX_test$LnReturns),
+                         garch_model = "sGARCH",
+                         garch_order = c(1,1),
+                         distribution = "std",
+                         start_date = "2023-01-03",
+                         end_date = "2023-12-29"
+                         )
+saveRDS(sGARCH_forecast,"output/sGARCH_forecast.rds")
+print(Sys.time()-time1)
+
+time1 <- Sys.time()
+eGARCH_forecast <- garch_forecast_expanding(rbind(SNEUCX_train$LnReturns,SNEUCX_test$LnReturns),
+                         garch_model = "eGARCH",
+                         garch_order = c(1,1),
+                         distribution = "std",
+                         start_date = "2023-01-03",
+                         end_date = "2023-12-29"
+                         )
+saveRDS(eGARCH_forecast,"output/eGARCH_forecast.rds")
+print(Sys.time()-time1)
+
+time1 <- Sys.time()
+apARCH_forecast <- garch_forecast_expanding(rbind(SNEUCX_train$LnReturns,SNEUCX_test$LnReturns),
+                         garch_model = "apARCH",
+                         garch_order = c(1,1),
+                         distribution = "std",
+                         start_date = "2023-01-03",
+                         end_date = "2023-12-29"
+                         )
+saveRDS(apARCH_forecast,"output/apARCH_forecast.rds")
+print(Sys.time()-time1)
+
+time1 <- Sys.time()
+sGARCH_M_forecast <- garch_forecast_expanding(rbind(SNEUCX_train$LnReturns,SNEUCX_test$LnReturns),
+                         garch_model = "sGARCH",
+                         garch_order = c(1,1),
+                         distribution = "std",
+                         start_date = "2023-01-03",
+                         end_date = "2023-12-29",
+                         is_archm = TRUE,
+                         archpow = 2
+                         )
+saveRDS(sGARCH_M_forecast,"output/sGARCH_M_forecast.rds")
+print(Sys.time()-time1)
+```
+
+```{r}
+model = sGARCH_forecast
+
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+), color = "red",alpha = 0.7) +
+  theme_minimal() +
+  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
+  ylim(c(min(model$var95),0))
+
+print(sum(SNEUCX_test$LnReturns<model$var95))
+index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
+```
+```{r}
+model = eGARCH_forecast
+
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+), color = "red",alpha = 0.7) +
+  theme_minimal() +
+  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
+  ylim(c(min(model$var95),0))
+
+print(sum(SNEUCX_test$LnReturns<model$var95))
+index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
+```
+
+```{r}
+model = apARCH_forecast
+
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+), color = "red",alpha = 0.7) +
+  theme_minimal() +
+  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
+  ylim(c(min(model$var95),0))
+
+print(sum(SNEUCX_test$LnReturns<model$var95))
+index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
+```
+
+```{r}
+model = sGARCH_M_forecast
+
+ggplot() +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
+), color = "red",alpha = 0.7) +
+  theme_minimal() +
+  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
+  ylim(c(min(model$var95),0))
+
+print(sum(SNEUCX_test$LnReturns<model$var95))
+index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
+```
+
+```{r}
+scale <- c(min(sGARCH_forecast$var95,eGARCH_forecast$var95,apARCH_forecast$var95,sGARCH_M_forecast$var95),max(sGARCH_forecast$var95,eGARCH_forecast$var95,apARCH_forecast$var95,sGARCH_M_forecast$var95))
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_test),y=sGARCH_forecast$var95, color = "VAR95_sGARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=eGARCH_forecast$var95, color = "VAR95_eGARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=apARCH_forecast$var95, color = "VAR95_apARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=sGARCH_M_forecast$var95, color = "VAR95_sGARCH_M"), alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<sGARCH_forecast$var95]),
+                 y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<sGARCH_forecast$var95]),
+             color = "red",alpha = 1) +
+  theme_minimal() +
+  ylab("Log returns") +
+  xlab("Date") +
+  scale_x_date(date_labels = "%d %b %Y") +
+  theme(legend.position="top") + 
+  scale_color_manual(name='',
+                     breaks = c('VAR95_sGARCH','VAR95_eGARCH','VAR95_apARCH', 'VAR95_sGARCH_M'),
+                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'black', 'VAR95_sGARCH_M' = 'purple')
+                     ) +
+  ylim(scale)
+```
+
+```{r}
+forecast_out_of_sample <- cbind(sGARCH_forecast$var95,eGARCH_forecast$var95,apARCH_forecast$var95,sGARCH_M_forecast$var95,
+                                sGARCH_forecast$var99,eGARCH_forecast$var99,apARCH_forecast$var99,sGARCH_M_forecast$var99)
+
+colnames(forecast_out_of_sample) <- c("VAR95_sGARCH","VAR95_eGARCH","VAR95_apARCH","VAR95_sGARCH_M",
+                                      "VAR99_sGARCH","VAR99_eGARCH","VAR99_apARCH","VAR99_sGARCH_M")
+
+summary_out_of_sample <-c()
+for (i in c("sGARCH","eGARCH","apARCH","sGARCH_M")){
+  summary_out_of_sample <- rbind(summary_out_of_sample, c(paste0(i),sum(SNEUCX_test$LnReturns < forecast_out_of_sample[,paste0("VAR95_",i)]),
+  (sum(SNEUCX_test$LnReturns < forecast_out_of_sample[,paste0("VAR95_",i)]))/length(SNEUCX_test$LnReturns),
+  sum(SNEUCX_test$LnReturns < forecast_out_of_sample[,paste0("VAR99_",i)]),
+  (sum(SNEUCX_test$LnReturns < forecast_out_of_sample[,paste0("VAR99_",i)]))/length(SNEUCX_test$LnReturns)))
+}
+summary_out_of_sample <- as_tibble(summary_out_of_sample)
+colnames(summary_out_of_sample) <- c("model","n_below_VAR95_out","%_below_VAR95_out","n_below_VAR99_out","%_below_VAR99_out")
+
+summary_out_of_sample %>% 
+  datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
+  formatPercentage(columns = c("%_below_VAR95_out","%_below_VAR99_out"), digits = 2)
+
+cbind(summary_in_sample,summary_out_of_sample[,c("n_below_VAR95_out","%_below_VAR95_out","n_below_VAR99_out","%_below_VAR99_out")]) %>% 
+datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
+  formatPercentage(columns = c('%_below_VAR95_in',"%_below_VAR99_in","%_below_VAR95_out","%_below_VAR99_out"), digits = 2)
+```
