@@ -1,6 +1,16 @@
 ---
-title: 02 Data Analysis
-date: 2024-06-06
+title: "Time Series Analysis Spring 2024"
+subtitle: "11. GARCH models"
+author: "Maciej Świtała, Paweł Sakowski"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: spacelab
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
 ---
 
 ```{r}
@@ -82,7 +92,7 @@ tibble(r = as.numeric(SNEUCX$LnReturns)) %>%
     caption = "Source: own calculations"
   )
 ```
-## Opis
+
 
 # Distribution density
 
@@ -100,7 +110,8 @@ ggplot(fortify(SNEUCX$LnReturns)) +
   theme_minimal() + 
   xlim(-0.15,0.15)
 ```
-
+## Histogram and densitiy interpretation
+The analysis reveals that the distribution of the created index does not follow a normal distribution. The log returns are more concentrated around the average value, resulting in a higher peak at the mean. This leptokurtosis suggests a higher likelihood of outliers compared to a normal distribution. It indic heavy tails and a greater probability of extreme returns. This observation highlights the importance of accounting for potential risks and the variability in returns when evaluating investment performance.
 # Quantiles
 
 ```{r}
@@ -110,10 +121,16 @@ ggplot(fortify(SNEUCX$LnReturns)) +
   ylab('Sample Quantiles') + 
   xlab('Theoretical Quantiles')
 ```
-## Opis
-heavy tails
+
+## Heavy tails 
+The x-axis plots the theoretical quantiles. Those are the quantiles from the standard Normal distribution with mean 0 and standard deviation 1. Black points don't follow the red line. That means that heavy tails are present.
+It means that, compared to the normal distribution, there is much more data located at the extremes of the distribution and less data in the center of the distribution
 
 # Basic statistics
+## Kurtosis
+Value of Kurtosis is equal to 11.75, which is grater than 3. That idicate=s that distribution odf data set does not follow normal distribution.
+
+A skew of 0.8 indicates that the distribution is positively skewed, meaning it has a longer tail on the right side.
 
 ```{r}
 ret_stats <- tibble(SNEUCX_Log_Returns = as.numeric(SNEUCX$LnReturns)) %>% 
@@ -138,4 +155,8 @@ tibble(Statistics = colnames(ret_stats), SNEUCX_Log_Returns = as.numeric(ret_sta
 ```{r}
 jarque.bera.test(SNEUCX$LnReturns)
 ```
-# KASIA - interpretacja
+
+## Interpretation
+In the context of the Jarque-Bera test, the null hypothesis (H0) is that the data follows a normal distribution.
+
+Since the p-value is significantly smaller than any conventional significance level (e.g., 0.05), we reject the null hypothesis. Therefore, the distribution of SNEUCX log returns does not follow a normal distribution.

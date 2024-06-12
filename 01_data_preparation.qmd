@@ -16,6 +16,8 @@ for (package in packages) {
 
 # Loading data
 
+Financial Instruments S&P 500, NVDA and EUR/USD  were loaded from stooq.pl. Cocoa futures was loaded from yahoo.com, XRP from coinmarketcap.com. Our observarions starts 2019-01-01 and ends on 2024-01-01
+
 ```{r}
 library(readr)
 sp500 <- read_csv("data/^spx_d.csv", col_types = cols(Data = col_date(format = "%Y-%m-%d")))
@@ -93,12 +95,13 @@ merged$XRP_CulReturns <- exp(cumsum(merged$XRP_LnReturns))
 
 Index returns are sum of equally weighted components returns
 
-S - SP500
-N - NVDA
-E - EUR
-U - USD
-C - COCOA
-X - XRP
+S - SP500 N - NVDA E - EUR U - USD C - COCOA X - XRP
+
+- Simple Net return was calculated as equally weighted average of net simple return of five underlying instruments.
+- Gross Return was calculated as Simple Net Return +1.
+- Value of the Index is equal to the Cumulative Product of Gross Return
+- Log return is equal to the logarithm of value of the index in time t divided by lagged value of this index.
+
 
 ```{r}
 
@@ -119,17 +122,10 @@ SNEUCX_index$LnReturns[1] <- 0
 ```
 
 # Plots
-
-```{r}
-cbind(merged$SP_CulReturns,merged$NVDA_CulReturns,merged$EURUSD_CulReturns, merged$XRP_CulReturns, SNEUCX_index$index_value)
-
-ggplot(cbind(merged$SP_CulReturns,merged$NVDA_CulReturns,merged$EURUSD_CulReturns, merged$XRP_CulReturns, SNEUCX_index$index_value)) +
-  geom_line(aes(x = Index, y = SP_CulReturns, color = "Linear"), alpha = 0.7) + 
-  scale_color_manual(name='Regression Model',
-                     breaks=c('Linear', 'Quadratic', 'Cubic'),
-                     values=c('Cubic'='pink', 'Quadratic'='blue', 'Linear'='purple'))
-```
-  
+The chart shows the cumulative returns of various indices and index components from early 2019 to early 2024. Key observations:
+- NVDA has the highest cumulative returns, reaching close to 15.
+- SNEUCX (our created portfolio) shows a steady, moderate increase.
+- Other components like SP500, Cocoa, EUR/USD, and XRP exhibit significantly smaller increases with noticeable fluctuations over the period.
 ```{r}
 ggplot() +
   geom_line(aes(x = index(merged), y = merged$SP_CulReturns, color = "SP500"), alpha = 0.7, linetype="dashed") + 
