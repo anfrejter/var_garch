@@ -1,0 +1,544 @@
+---
+title: "03 GARCH modeling"
+date: 2024-05-08
+title-block-banner: true
+format:
+  html:
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    toc-depth: 2
+    code-fold: true
+    self-contained: true
+---
+
+------------------------------------------------------------------------
+
+```{r}
+packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries", "stats", "forecast", "lmtest", "FinTS", "rugarch", "aTSA")
+
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+```
+
+# Load data
+
+```{r}
+SNEUCX_train <- read_rds("input/SNEUCX_train.rds")
+source("functions/testdf.R")
+```
+
+# Mean equation
+
+Before fitting ARIMA model we will test for stationarity and determine integration order.
+
+## White noise testing
+
+```{r}
+testdf(variable = SNEUCX_train$LnReturns,
+       max.augmentations = 3) %>% 
+  datatable(rownames = FALSE, options = list(dom = 't', ordering=F), class = 'cell-border stripe') %>% 
+  formatRound(columns = c('adf', 'p_adf', 'bgodfrey', 'p_bg'), digits = 4)
+```
+
+Based on Breusch Godfrey test we cannot reject hypothesis that there is no autocorrelation among residuals for DF test with 0 augumentations. P-value for ADF test with zero augumentations is low - we can reject hupothesis that time series is non stationary. Our series is stationary, so we will move to fitting ARMA model
+
+## ACF and PACF of log returns
+
+```{r}
+par(mfrow = c(1, 1))
+acf(SNEUCX_train$LnReturns,
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    main = "ACF",
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(SNEUCX_train$LnReturns,
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     main = "PACF",
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+par(mfrow = c(1, 1))
+```
+
+ACF and PACF plots show that 7th and 10th lags are significant. This suggest analizing model ARMA up to order 10 of p and q.
+
+## Mean equation model
+
+We will choose models based on BIC criterion as it penalizes large number of parameters the most. We prefer parsimonious models that won't overfit. We fit models with p up to 10 and q up to 10. Some models will be defined manually as auto.arima doesn't take into consideration models, that have only for example 10th lag without lags from 1 to 9.
+
+```{r}
+Akaike <-c()
+Bayes <-c()
+
+arma10_10 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(10, 0, 10),
+                  fixed = c(0,0,0,0,0,0,0,0,0,NA,0,0,0,0,0,0,0,0,0,NA,NA)
+                  )
+Akaike <- rbind(Akaike,AIC(arma10_10))
+Bayes <- rbind(Bayes,BIC(arma10_10))
+
+arma7_10_7_10 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(10, 0, 10),
+                  fixed = c(0,0,0,0,0,0,NA,0,0,NA,0,0,0,0,0,0,NA,0,0,NA,NA)
+                  )
+Akaike <- rbind(Akaike,AIC(arma7_10_7_10))
+Bayes <- rbind(Bayes,BIC(arma7_10_7_10))
+
+arma0_7 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(0, 0, 7),
+                 fixed = c(0,0,0,0,0,0,NA,NA)
+                  )
+Akaike <- rbind(Akaike,AIC(arma0_7))
+Bayes <- rbind(Bayes,BIC(arma0_7))
+
+arma7_0 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(7, 0, 0),
+                 fixed = c(0,0,0,0,0,0,NA,NA)
+                  )
+Akaike <- rbind(Akaike,AIC(arma7_0))
+Bayes <- rbind(Bayes,BIC(arma7_0))
+
+arma1_0 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(1, 0, 0)
+                  )
+Akaike <- rbind(Akaike,AIC(arma1_0))
+Bayes <- rbind(Bayes,BIC(arma1_0))
+
+arma0_1 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(0, 0, 1)
+                  )
+Akaike <- rbind(Akaike,AIC(arma1_0))
+Bayes <- rbind(Bayes,BIC(arma1_0))
+
+arma0_0 <- Arima(SNEUCX_train$LnReturns,
+                  order = c(0, 0, 0)
+                  )
+
+Akaike <- rbind(Akaike,AIC(arma0_0))
+Bayes <- rbind(Bayes,BIC(arma0_0))
+
+acf(resid(arma10_10),
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(resid(arma10_10),
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+
+acf(resid(arma7_10_7_10),
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(resid(arma7_10_7_10),
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+
+acf(resid(arma0_7),
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(resid(arma0_7),
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+
+acf(resid(arma7_0),
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(resid(arma7_0),
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+
+acf(resid(arma1_0),
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    xlim = c(2,36),
+    ylim = c(-0.1,0.1))
+pacf(resid(arma1_0),
+     lag.max = 36,
+     lwd = 5, 
+     col = "red", 
+     xlim = c(2,36),
+     ylim = c(-0.1,0.1))
+
+arima.best.BIC <- 
+  auto.arima(SNEUCX_train$LnReturns,
+             max.p = 10,
+             max.q = 10,
+             max.order = 20,
+             ic = 'bic',
+             stepwise = FALSE)
+print(arima.best.BIC)
+```
+
+ACF and PACF plots shows us that adding 10th lag to ma and ar equation removes statistically significant 10th lag and 7th lag remains borderline significant. ARMA with only 7th lag in AR or 7th lag in MA still shows 10th significant lag in PACF or ACF.
+
+Auto arima function proposes ARMA00 or so called naive model.
+
+```{r}
+model_name <- c("arma10_10","arma7_10_7_10","arma0_7","arma7_0", "arma1_0","arma0_1","arma0_0")
+
+scores <- cbind(model_name, Akaike, Bayes)
+colnames(scores) <- c("Model","Akaike","Bayes")
+
+scores %>% 
+  datatable(rownames = FALSE, class = 'cell-border stripe') %>% 
+  formatRound(columns = c("Akaike","Bayes"), digits = 0)
+```
+
+Manually created models compared to "no model" perform worse in terms of BIC score. In that case we will continue with ARIMA(0,0,0)
+
+# ARCH effect
+
+## Serial autocorrelation
+
+```{r}
+acf(SNEUCX_train$LnReturns^2,
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    main = "ACF of squared log returns",
+    xlim = c(2,36),
+    ylim = c(-0.05,0.2))
+```
+
+Based on ACF os squared log returns/residuals of ARMA(0,0) we can see that serial autocorrelation is present which suggest ARCH effects.
+
+## ARCH test
+
+```{r}
+acf(SNEUCX_train$LnReturns^2,
+    lag.max = 36,
+    lwd = 5, 
+    col = "red", 
+    main = "ACF of squared log returns",
+    xlim = c(2,36),
+    ylim = c(-0.05,0.2))
+
+arma0_0 <- arima(SNEUCX_train$LnReturns,order = c(0,0,0))
+arch.test(arma0_0)
+```
+
+Formally testing time series with ARCH LM test we can reject null hypothesis that ARCH effect is not present.
+
+# ARCH models
+
+## ARCH(1)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,0)), mean.model = list(armaOrder = c(0, 0)))
+ARCH1 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+print(ARCH1)
+
+jarque.bera.test(ARCH1@fit$residuals/sqrt(sigma(ARCH1)))
+
+plot(ARCH1,which = 10)
+plot(ARCH1,which = 11)
+plot(ARCH1,which = 3)
+```
+
+In optimal parameter section we can see that all parameters are statistically significant, alpha1 necomes less significant if we take into consideration robust standard errors.
+
+Weighted Ljung-Box test on Standardized Residuals tells us that mean equation seems to be correct as we don't have any significant lags.
+
+Based on Weighted Ljung-Box Test on Standardized Squared Residuals, we can notice that fifth lag is still significant suggesting that variance equation may be enhanced.
+
+We cannot reject the hypothesis that ARCH effects are not present on 2,4 and 6th lag.
+
+Nyblom stability test suggest that jointly model is almost stable - statistic is close to 10% critical value, if we look at this invidually omega is likely to change in time. We cannot rejec the hypothesis that those parameters are constant.
+
+Additionally we cannot reject the hypothesis that leverage effect exists. Negative and positive shocks have statistically significantly different impact.
+
+ACF plot of standarized residuals shows significant autocorrelation for 7th and 10th lag.
+
+ACF plot od squared standarized residuals shows significant autocorrelation for 5th lag. We will add up to 5th lag of innovation to next model.
+
+Standarized residuals don't have normal distribution.
+
+## ARCH(5)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(5,0)), mean.model = list(armaOrder = c(0, 0)))
+ARCH5 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+print(ARCH5)
+
+plot(ARCH5,which = 10)
+plot(ARCH5,which = 11)
+plot(ARCH5,which = 3)
+```
+
+Now based on Weighted Ljung-Box Test on Standardized Squared Residuals auto-correlation is no longer present. Analyzing ACF plot for squared standarized residuals 9th lag became autocorrelated.
+
+ARCH effect is present for 10th lag. We will proceed with ARCH9
+
+## ARCH(9)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(9,0)), mean.model = list(armaOrder = c(0, 0)))
+ARCH9 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+print(ARCH9)
+
+jarque.bera.test(ARCH9@fit$residuals/sqrt(sigma(ARCH9)))
+
+plot(ARCH9,which = 10)
+plot(ARCH9,which = 11)
+plot(ARCH9,which = 3)
+```
+
+Finally model seems to be correct in terms of autocorrelation of standarized squared residuals and arch effects. Autocorrelation based on ACF plot and Ljung-Box test are no longer significant. ARCH of order 9 is quite a lot, we will try fitting ARCH models of order 1 to 9, but without that detailed analysis.
+
+Additionally, investigating ACF plot of standarized residuals we can see that none of lags up. to 15th have statistically significant autocorrelation.
+
+## Aditional models
+
+We will consider all ARCH models of order 1 to 9.
+
+```{r}
+arch <-c()
+for (i in 1:9){
+  spec <- ugarchspec(variance.model = list(garchOrder = c(i,0)), mean.model = list(armaOrder = c(0, 0)))
+  arch_tmp <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+  arch <- cbind(arch,arch_tmp)
+}
+```
+
+# GARCH models
+
+## GARCH(1,1)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,1)), mean.model = list(armaOrder = c(0, 0)))
+GARCH11 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+print(GARCH11)
+
+jarque.bera.test(GARCH11@fit$residuals/sqrt(sigma(GARCH11)))
+
+plot(GARCH11,which = 10)
+plot(GARCH11,which = 11)
+plot(GARCH11,which = 3)
+```
+
+Looking at the first table with optimal parameters we can see that now all parameters are statistically significant except for mu in mean equation.
+
+Ljung-box test on Standarized Residuals and the squared ones shows no autocorrelation within the residuals.
+
+Based on Weighted ARCH LM test, ARCH effects are not present.
+
+Nyblom stavility test tells us that model parameters are jointly unstable, but looking at it individually, omega is likely to change in time.
+
+We reject the hypothesis that leverage effect is not present.
+
+ACF plot of standarized residuals and standarized squared residuals shows no significant serial autocorrelation up to 20th lag.
+
+As leverage effect is present we will additionally try fitting EGARCH models which takes this issue into account. Since for all Jarque-Bera tests null hypothesis about normal distribution among standarized residuals was rejected, we will try working with distributions such as t-student, skewed t-student, generalized error, skewed generalized error, skewed normal.
+
+As an addition we will fit GARCH-in-Mean model, to see if including risk premium will enchance our model.
+
+```{r}
+garch_models = c("sGARCH","eGARCH","apARCH")
+distirbution = c("norm","std","sstd","ged","sged","snorm")
+order_p = c(1,2)
+order_q = c(1,2)
+
+model_name <- c()
+Akaike <-c()
+Bayes <-c()
+Shibata <-c()
+HQ <-c()
+
+for (i in 1:length(garch_models)){
+  for (j in 1:length(distirbution)){
+    for (k in 1:length(order_p)){
+      for (l in 1:length(order_q)){
+        
+        spec <- ugarchspec(variance.model = list(garchOrder = c(order_p[k],order_q[l]),
+          model = garch_models[i]),
+          mean.model = list(armaOrder = c(0, 0)),
+          distribution.model = distirbution[j])
+        
+        GARCH <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+        model_name <- rbind(model_name,paste0(garch_models[i],"_",distirbution[j],"_",order_p[k],order_q[l]))
+        if (is.null(GARCH)) {
+          Akaike <- rbind(Akaike,NaN)
+          Bayes <- rbind(Bayes,NaN)
+          Shibata <- rbind(Shibata,NaN)
+          HQ <- rbind(HQ,NaN)
+        } else {
+          Akaike <- rbind(Akaike,infocriteria(GARCH)[1])
+          Bayes <- rbind(Bayes,infocriteria(GARCH)[2])
+          Shibata <- rbind(Shibata,infocriteria(GARCH)[3])
+          HQ <- rbind(HQ,infocriteria(GARCH)[4])
+        }
+      }
+    }
+  }
+}
+
+for (i in 1:length(garch_models)){
+  for (j in 1:length(distirbution)){
+    for (k in 1:length(order_p)){
+      for (l in 1:length(order_q)){
+        
+        spec <- ugarchspec(variance.model = list(garchOrder = c(order_p[k],order_q[l]),
+          model = garch_models[i]),
+          mean.model = list(armaOrder = c(0, 0), archm = TRUE, archpow = 2),
+          distribution.model = distirbution[j])
+        
+        GARCH <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+        model_name <- rbind(model_name,paste0(garch_models[i],"_M","_",distirbution[j],"_",order_p[k],order_q[l]))
+        if (is.null(GARCH)) {
+          Akaike <- rbind(Akaike,NaN)
+          Bayes <- rbind(Bayes,NaN)
+          Shibata <- rbind(Shibata,NaN)
+          HQ <- rbind(HQ,NaN)
+        } else {
+          Akaike <- rbind(Akaike,infocriteria(GARCH)[1])
+          Bayes <- rbind(Bayes,infocriteria(GARCH)[2])
+          Shibata <- rbind(Shibata,infocriteria(GARCH)[3])
+          HQ <- rbind(HQ,infocriteria(GARCH)[4])
+        }
+      }
+    }
+  }
+}
+```
+
+# Summary of information criteria for models
+
+```{r}
+for (i in 1:length(arch)){
+  model_name <- rbind(model_name,paste0("ARCH",i))
+  Akaike <- rbind(Akaike,infocriteria(arch[[i]])[1])
+  Bayes <- rbind(Bayes,infocriteria(arch[[i]])[2])
+  Shibata <- rbind(Shibata,infocriteria(arch[[i]])[3])
+  HQ <- rbind(HQ,infocriteria(arch[[i]])[4])
+}
+
+scores <- cbind(model_name, Akaike, Bayes, Shibata, HQ)
+colnames(scores) <- c("Model","Akaike","Bayes","Shibata","Hannan-Quinn")
+
+scores %>% 
+  datatable(rownames = FALSE, class = 'cell-border stripe') %>% 
+  formatRound(columns = c("Akaike","Bayes","Shibata","Hannan-Quinn"), digits = 4)
+```
+
+We can see that best performing models in terms of BIC scores are with t-student distribution.
+
+We will choose models based on Bayes information criterion, two models with the lowest scores are: -standard GARCH with t-student distribution of order (1,1) -exponential GARCH with t-student distribution of order (1,1). If we consider Akaike ans Shibata scores, the second best model is asymmetric power ARCH model with t-student distribution or order (1,1) We will use this models for VAR modeling in later steps. Additionally we will include standard GARCH-in-Mean model with t-student distribution of order (1,1) for research purposes.
+
+## Investigation of models
+
+### GARCH-t(1,1)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,1),
+        model = "sGARCH"),
+        mean.model = list(armaOrder = c(0, 0)),
+        distribution.model = "std")
+      
+sGARCH_std_11 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+
+print(sGARCH_std_11)
+
+plot(sGARCH_std_11,which = 10)
+plot(sGARCH_std_11,which = 11)
+plot(sGARCH_std_11,which = 3)
+plot(sGARCH_std_11, which = 12)
+plot(sGARCH_std_11, which = 9)
+```
+
+COMMENT - todo
+
+### GARCH-t(1,1)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,1),
+        model = "eGARCH"),
+        mean.model = list(armaOrder = c(0, 0)),
+        distribution.model = "std")
+      
+eGARCH_std_11 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+
+print(eGARCH_std_11)
+
+plot(eGARCH_std_11,which = 10)
+plot(eGARCH_std_11,which = 11)
+plot(eGARCH_std_11,which = 3)
+plot(eGARCH_std_11, which = 12)
+plot(eGARCH_std_11, which = 9)
+```
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,1),
+        model = "apARCH"),
+        mean.model = list(armaOrder = c(0, 0)),
+        distribution.model = "std")
+      
+apARCH_std_11 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+
+print(apARCH_std_11)
+
+plot(apARCH_std_11,which = 10)
+plot(apARCH_std_11,which = 11)
+plot(apARCH_std_11,which = 3)
+plot(apARCH_std_11, which = 12)
+plot(apARCH_std_11, which = 9)
+```
+
+### GARCH-in-Mean-t(1,1)
+
+```{r}
+spec <- ugarchspec(variance.model = list(garchOrder = c(1,1),
+        model = "sGARCH"),
+        mean.model = list(armaOrder = c(0, 0), archm = TRUE, archpow = 2),
+        distribution.model = "std")
+      
+sGARCH_M_std_11 <- ugarchfit(spec = spec, data = SNEUCX_train$LnReturns, solver = "hybrid")
+
+print(sGARCH_M_std_11)
+
+plot(sGARCH_M_std_11,which = 10)
+plot(sGARCH_M_std_11,which = 11)
+plot(sGARCH_M_std_11,which = 3)
+plot(sGARCH_M_std_11, which = 12)
+plot(sGARCH_M_std_11, which = 9)
+```
+
+# Save models
+
+```{r}
+saveRDS(sGARCH_std_11,"models/sGARCH_std_11.rds")
+saveRDS(eGARCH_std_11,"models/eGARCH_std_11.rds")
+saveRDS(apARCH_std_11,"models/apARCH_std_11.rds")
+saveRDS(sGARCH_M_std_11,"models/sGARCH_M_std_11.rds")
+```
