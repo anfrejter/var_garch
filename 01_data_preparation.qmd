@@ -1,7 +1,25 @@
 ---
-title: 01 Data preparation
-date: 2024-06-04
+title: "01 Data preparation"
+author: "Dybcio Katarzyna, Frejter Quoc"
+date: 2024-05-04
+title-block-banner: '#faa9df'
+format:
+  html:
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number-sections: true
+    toc-depth: 3
+    code-fold: true
+    self-contained: true
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, 
+                      warning = FALSE, message = FALSE)
+options(scipen = 10)
+```
 
 ```{r}
 packages <- c("readr","xts","tidyverse")
@@ -16,7 +34,7 @@ for (package in packages) {
 
 # Loading data
 
-Financial Instruments S&P 500, NVDA and EUR/USD  were loaded from stooq.pl. Cocoa futures was loaded from yahoo.com, XRP from coinmarketcap.com. Our observarions starts 2019-01-01 and ends on 2024-01-01
+Financial Instruments S&P 500, NVDA and EUR/USD were loaded from stooq.pl. Cocoa futures was loaded from yahoo.com, XRP from coinmarketcap.com. Our observarions starts 2019-01-01 and ends on 2024-01-01
 
 ```{r}
 library(readr)
@@ -84,11 +102,11 @@ merged$XRP_LnReturns[1] <- 0
 
 # Cumulative returns
 
-merged$SP_CulReturns <- exp(cumsum(merged$SP_LnReturns))
-merged$NVDA_CulReturns <- exp(cumsum(merged$NVDA_LnReturns))
-merged$CC_CulReturns <- exp(cumsum(merged$CC_LnReturns))
-merged$EURUSD_CulReturns <- exp(cumsum(merged$EURUSD_LnReturns))
-merged$XRP_CulReturns <- exp(cumsum(merged$XRP_LnReturns))
+merged$SP_CumReturns <- exp(cumsum(merged$SP_LnReturns)) - 1
+merged$NVDA_CumReturns <- exp(cumsum(merged$NVDA_LnReturns))  - 1
+merged$CC_CumReturns <- exp(cumsum(merged$CC_LnReturns))  - 1
+merged$EURUSD_CumReturns <- exp(cumsum(merged$EURUSD_LnReturns))  - 1
+merged$XRP_CumReturns <- exp(cumsum(merged$XRP_LnReturns))  - 1
 ```
 
 # Index creation
@@ -97,11 +115,10 @@ Index returns are sum of equally weighted components returns
 
 S - SP500 N - NVDA E - EUR U - USD C - COCOA X - XRP
 
-- Simple Net return was calculated as equally weighted average of net simple return of five underlying instruments.
-- Gross Return was calculated as Simple Net Return +1.
-- Value of the Index is equal to the Cumulative Product of Gross Return
-- Log return is equal to the logarithm of value of the index in time t divided by lagged value of this index.
-
+-   Simple Net return was calculated as equally weighted average of net simple return of five underlying instruments.
+-   Gross Return was calculated as Simple Net Return +1.
+-   Value of the Index is equal to the Cumulative Product of Gross Return
+-   Log return is equal to the logarithm of value of the index in time t divided by lagged value of this index.
 
 ```{r}
 
@@ -115,33 +132,47 @@ SNEUCX_index$index_SimReturns["2019-01-02"] <- 0
 
 SNEUCX_index$index_Sim_Gross_Returns <- SNEUCX_index$index_SimReturns + 1
 
-SNEUCX_index$index_value <- cumprod(SNEUCX_index$index_Sim_Gross_Returns)
+SNEUCX_index$CumRet <- cumprod(SNEUCX_index$index_Sim_Gross_Returns) - 1
 
-SNEUCX_index$LnReturns <- log(SNEUCX_index$index_value/lag(SNEUCX_index$index_value))
+SNEUCX_index$LnReturns <- log(SNEUCX_index$index_Sim_Gross_Returns)
 SNEUCX_index$LnReturns[1] <- 0
 ```
 
 # Plots
-The chart shows the cumulative returns of various indices and index components from early 2019 to early 2024. Key observations:
-- NVDA has the highest cumulative returns, reaching close to 15.
-- SNEUCX (our created portfolio) shows a steady, moderate increase.
-- Other components like SP500, Cocoa, EUR/USD, and XRP exhibit significantly smaller increases with noticeable fluctuations over the period.
+
+The chart shows the cumulative returns of various indices and index components from early 2019 to early 2024. Key observations: - NVDA has the highest cumulative returns, reaching close to 15. - SNEUCX (our created portfolio) shows a steady, moderate increase. - Other components like SP500, Cocoa, EUR/USD, and XRP exhibit significantly smaller increases with noticeable fluctuations over the period.
+
 ```{r}
 ggplot() +
-  geom_line(aes(x = index(merged), y = merged$SP_CulReturns, color = "SP500"), alpha = 0.7, linetype="dashed") + 
-  geom_line(aes(x = index(merged), y = merged$NVDA_CulReturns, color = "NVDA"), alpha = 0.7, linetype="dashed") + 
-  geom_line(aes(x = index(merged), y = merged$CC_CulReturns, color = "Cocoa"), alpha = 0.7, linetype="dashed") + 
-  geom_line(aes(x = index(merged), y = merged$EURUSD_CulReturns, color = "EUR_USD"), alpha = 0.7, linetype="dashed") + 
-  geom_line(aes(x = index(merged), y = merged$XRP_CulReturns, color = "XRP"), alpha = 0.7, linetype="dashed") +
-  geom_line(aes(x = index(SNEUCX_index), y = SNEUCX_index$index_value, color = "SNEUCX"),linewidth = 0.8) +
+  geom_line(aes(x = index(merged), 
+                y = merged$SP_CumReturns, color = "SP500"), 
+            alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), 
+                y = merged$NVDA_CumReturns, color = "NVDA"),
+            alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged),
+                y = merged$CC_CumReturns, color = "Cocoa"),
+            alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged), 
+                y = merged$EURUSD_CumReturns, color = "EUR_USD"),
+            alpha = 0.7, linetype="dashed") + 
+  geom_line(aes(x = index(merged),
+                y = merged$XRP_CumReturns, color = "XRP"),
+            alpha = 0.7, linetype="dashed") +
+  geom_line(aes(x = index(SNEUCX_index), 
+                y = SNEUCX_index$CumRet, color = "SNEUCX"),
+            linewidth = 0.8) +
   xlab("Date") +
   ylab("Cumulative returns") +
   ggtitle('Cumulative returns of index and index components') +
   scale_x_date(date_labels = "%d %b %Y") +
   theme_minimal() +
   scale_color_manual(name='',
-                     breaks = c('SP500','NVDA','Cocoa','EUR_USD', 'XRP', 'SNEUCX'),
-                     values = c('SP500'='darkgreen','NVDA'='blue', 'Cocoa' = 'brown', 'EUR_USD' = 'yellow', 'XRP' = 'black', 'SNEUCX' = 'red')
+                     breaks = c('SP500','NVDA','Cocoa',
+                                'EUR_USD', 'XRP', 'SNEUCX'),
+                     values = c('SP500'='darkgreen','NVDA'='blue',
+                                'Cocoa' = 'brown', 'EUR_USD' = 'yellow',
+                                'XRP' = 'black', 'SNEUCX' = 'red')
                      )
 ```
 
@@ -150,11 +181,11 @@ ggplot() +
 ```{r}
 # Train data
 
-saveRDS(SNEUCX_index["2019-01-01/2022-12-31",c("index_value","LnReturns")], 
+saveRDS(SNEUCX_index["2019-01-01/2022-12-31",c("CumRet","LnReturns")], 
         file = "input/SNEUCX_train.rds")
 
 # Test data
 
-saveRDS(SNEUCX_index["2023-01-01/2023-12-31",c("index_value","LnReturns")], 
+saveRDS(SNEUCX_index["2023-01-01/2023-12-31",c("CumRet","LnReturns")], 
         file = "input/SNEUCX_test.rds")
 ```

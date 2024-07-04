@@ -1,17 +1,25 @@
 ---
-title: "Time Series Analysis Spring 2024"
-subtitle: "11. GARCH models"
-author: "Maciej Świtała, Paweł Sakowski"
-date: "`r Sys.Date()`"
-output: 
-  html_document:
-    theme: spacelab
-    highlight: tango
+title: "02 data analysis"
+author: "Dybcio Katarzyna, Frejter Quoc"
+date: 2024-05-06
+title-block-banner: '#faa9df'
+format:
+  html:
     toc: true
     toc_float:
-      collapsed: false
+      collapsed: true
       smooth_scroll: true
+    number-sections: true
+    toc-depth: 3
+    code-fold: true
+    self-contained: true
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, 
+                      warning = FALSE, message = FALSE)
+options(scipen = 10)
+```
 
 ```{r}
 packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries", "moments")
@@ -37,7 +45,7 @@ SNEUCX <- rbind(SNEUCX_train,SNEUCX_test)
 
 ```{r}
 p1 = ggplot(fortify(SNEUCX)) +
-  geom_line(aes(x=Index, y=index_value), colour = 'black') +
+  geom_line(aes(x=Index, y=CumRet), colour = 'black') +
   scale_x_date(date_labels = "%d %b %Y") +
   xlab("") +
   ylab("") + 
@@ -57,20 +65,9 @@ p2 = ggplot(fortify(SNEUCX)) +
 
 p1 / p2
 ```
+# Distribution of data
 
-```{r}
-ggplot(SNEUCX) +
-  geom_line(aes(x=Index, y=index_value), colour = 'black') +
-  scale_x_date(date_labels = "%d %b %Y") +
-  geom_line(aes(x=Index, y=LnReturns/0.1), colour = 'red', linewidth = 0.3) + 
-  scale_y_continuous(
-    name = "Index value",
-    sec.axis = sec_axis(~.*0.1, name = "Log returns")
-  ) +
-  theme_minimal()
-```
-
-# Histogram of index
+## Histogram
 
 ```{r}
 tibble(r = as.numeric(SNEUCX$LnReturns)) %>%
@@ -94,7 +91,7 @@ tibble(r = as.numeric(SNEUCX$LnReturns)) %>%
 ```
 
 
-# Distribution density
+## Density
 
 ```{r}
 ggplot(fortify(SNEUCX$LnReturns)) + 
@@ -110,8 +107,9 @@ ggplot(fortify(SNEUCX$LnReturns)) +
   theme_minimal() + 
   xlim(-0.15,0.15)
 ```
-## Histogram and densitiy interpretation
+## Interpretation
 The analysis reveals that the distribution of the created index does not follow a normal distribution. The log returns are more concentrated around the average value, resulting in a higher peak at the mean. This leptokurtosis suggests a higher likelihood of outliers compared to a normal distribution. It indic heavy tails and a greater probability of extreme returns. This observation highlights the importance of accounting for potential risks and the variability in returns when evaluating investment performance.
+
 # Quantiles
 
 ```{r}
@@ -127,10 +125,6 @@ The x-axis plots the theoretical quantiles. Those are the quantiles from the sta
 It means that, compared to the normal distribution, there is much more data located at the extremes of the distribution and less data in the center of the distribution
 
 # Basic statistics
-## Kurtosis
-Value of Kurtosis is equal to 11.75, which is grater than 3. That idicate=s that distribution odf data set does not follow normal distribution.
-
-A skew of 0.8 indicates that the distribution is positively skewed, meaning it has a longer tail on the right side.
 
 ```{r}
 ret_stats <- tibble(SNEUCX_Log_Returns = as.numeric(SNEUCX$LnReturns)) %>% 
@@ -149,6 +143,11 @@ tibble(Statistics = colnames(ret_stats), SNEUCX_Log_Returns = as.numeric(ret_sta
   datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe', width = 10) %>% 
   formatRound(columns = c('SNEUCX_Log_Returns'), digits = 4)
 ```
+## Interpretation
+
+Value of Kurtosis is equal to 11.75, which is grater than 3. That idicate=s that distribution odf data set does not follow normal distribution.
+
+A skew of 0.8 indicates that the distribution is positively skewed, meaning it has a longer tail on the right side.
 
 # Normal distribution?
 

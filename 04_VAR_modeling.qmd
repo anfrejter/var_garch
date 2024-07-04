@@ -1,20 +1,30 @@
 ---
-title: "04 VAR modeling"
+title: "04 VaR modeling"
+author: "Dybcio Katarzyna, Frejter Quoc"
 date: 2024-05-08
-title-block-banner: true
+title-block-banner: '#faa9df'
 format:
   html:
     toc: true
     toc_float:
       collapsed: true
       smooth_scroll: true
-    toc-depth: 2
+    number-sections: true
+    toc-depth: 3
     code-fold: true
     self-contained: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, 
+                      warning = FALSE, message = FALSE)
+options(scipen = 10)
+```
+
 ```{r}
-packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", "tseries", "stats", "forecast", "lmtest", "FinTS", "rugarch", "aTSA")
+packages <- c("readr","xts","tidyverse", "DT", "patchwork", "ggthemes", 
+              "tseries", "stats", "forecast", "lmtest", "FinTS", "rugarch", 
+              "aTSA")
 
 for (package in packages) {
   if (!require(package, character.only = TRUE)) {
@@ -36,11 +46,11 @@ apARCH_std_11 <- read_rds("models/apARCH_std_11.rds")
 sGARCH_M_std_11 <- read_rds("models/sGARCH_M_std_11.rds")
 ```
 
-# Empirical quantile
+# Empirical quantiles
 
 ```{r}
-q05 <- quantile(SNEUCX_train, 0.05)
-q01 <- quantile(SNEUCX_train, 0.01)
+q05 <- quantile(SNEUCX_train$LnReturns, 0.05)
+q01 <- quantile(SNEUCX_train$LnReturns, 0.01)
 
 ggplot() + 
   geom_density(aes(x = SNEUCX_train$LnReturns),colour = 'blue', fill = "lightblue", alpha = 0.3) + 
@@ -50,10 +60,28 @@ ggplot() +
   annotate(x=q01,y=25,label="1st\npercentile",vjust=2,geom="label") +
   xlab("Log returns") +
   ylab("Density") +
-  xlim(c(-0.15,mean(SNEUCX_train$LnReturns))) +
+  ggtitle('Density plot of log returns') + 
   theme_minimal()
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_train$LnReturns),
+                 y=SNEUCX_train$LnReturns), colour = "black",alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<quantile(SNEUCX_train$LnReturns, 0.05)]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<quantile(SNEUCX_train$LnReturns, 0.05)]), colour = "red",alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<quantile(SNEUCX_train$LnReturns, 0.01)]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<quantile(SNEUCX_train$LnReturns, 0.01)]), colour = "blue",alpha = 0.7) +
+  theme_minimal() +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.0015,x=index(SNEUCX_train)[20],label="5th percentile",geom="label", size = 3, alpha = 0.7) +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.0015,x=index(SNEUCX_train)[20],label="1st percentile",geom="label", size = 3, alpha = 0.7) +
+  ylab("Log returns") +
+  xlab("Date") +
+  ggtitle('Log returns exceeding 5th and 1st percentile') +
+  scale_x_date(date_labels = "%d %b %Y")
 ```
-# VAR
+
+# Value at Risk
 
 ## In-Sample
 
@@ -73,6 +101,130 @@ SNEUCX_train$VAR99_apARCH <- q01*apARCH_std_11@fit$sigma
 SNEUCX_train$VAR99_sGARCH_M <- q01*sGARCH_M_std_11@fit$sigma
 ```
 
+### VaR 95 plot
+
+Plot function
+
+```{r}
+varplot <- function(returns_data,var_data,model_name = "",quan = 5, col = "darkred",
+                    percentile_data = returns_data
+                    ){
+  if (quan == 1) {
+    label_str <-paste0(toString(quan),"st percentile")
+  } else {
+    label_str <-paste0(toString(quan),"th percentile")
+  }
+  plotvar <- ggplot() +
+    geom_point(aes(x=index(returns_data),y=returns_data), color = "black", alpha = 0.5, shape = 20) +
+    geom_point(aes(x=index(returns_data[returns_data<var_data]
+  ),y=returns_data[returns_data<var_data]), color = "red",alpha = 0.7, shape = 8) +
+    geom_line(aes(x=index(returns_data),y=var_data), color = col) +
+    theme_minimal() +
+    ylab("Log returns") +
+    xlab("Date") +
+    ylim(c(min(var_data,returns_data),0)) +
+    ggtitle(model_name) 
+#   annotate(y=quantile(percentile_data,quan/100)-round(-min(var_data,returns_data)*0.1,0),
+#            x=index(returns_data)[round(length(returns_data)*0.1,0)],
+#            label=label_str,geom="label", size = 3, alpha = 0.7) +
+#   geom_hline(yintercept = quantile(percentile_data,quan/100),linetype = "dashed", color = 'darkgreen')
+  return(plotvar)
+  }
+```
+
+```{r}
+p1 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR95_sGARCH,"sGARCH",5)
+
+p2 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR95_eGARCH,"eGARCH", 5,'blue')
+
+p3 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR95_apARCH,"apARCH", 5, 'darkgreen')
+
+p4 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR95_sGARCH_M,"sGARCH-M", 5, 'purple')
+
+(p1 | p2 ) / (p3 | p4) + plot_annotation(title = 'Value at risk 95% in sample')
+```
+
+```{r}
+scale = c(min(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M)
+          ,max(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M))
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH,color = "VAR95_sGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]), fill = "red",alpha = 0.5, shape = 21) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_eGARCH, color = "VAR95_eGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]), color = "blue",alpha = 0.5, shape = 22) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_apARCH, color = "VAR95_apARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]), color = "darkgreen",alpha = 0.5, shape = 23) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH_M, color = "VAR95_sGARCH_M"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]), color = "purple",alpha = 0.5, shape = 24) +
+  theme_minimal() +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.0015,x=index(SNEUCX_train)[20],label="5th percentile",geom="label", size = 3, alpha = 0.7) +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.0015,x=index(SNEUCX_train)[20],label="1st percentile",geom="label", size = 3, alpha = 0.7) +
+  theme(legend.position="top") + 
+  scale_color_manual(name='',
+                     breaks = c('VAR95_sGARCH','VAR95_eGARCH','VAR95_apARCH', 'VAR95_sGARCH_M'),
+                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'darkgreen', 'VAR95_sGARCH_M' = 'purple')
+                     ) +
+  ylim(scale) +
+  ylab("Log returns") +
+  xlab("Date") +
+  scale_x_date(date_labels = "%d %b %Y") +
+  ggtitle('Value at risk 95% in sample')
+```
+
+### VaR 99 plot
+
+```{r}
+p1 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR99_sGARCH,"sGARCH",1,'darkred')
+
+p2 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR99_eGARCH,"eGARCH",1,'blue')
+
+p3 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR99_apARCH,"apARCH",1,'darkgreen')
+
+p4 <- varplot(SNEUCX_train$LnReturns,SNEUCX_train$VAR99_sGARCH_M,"sGARCH-M",1,'purple')
+
+(p1 | p2 ) / (p3 | p4) + plot_annotation(title = 'Value at risk 99% in sample')
+```
+
+```{r}
+scale = c(min(SNEUCX_train$VAR99_sGARCH,SNEUCX_train$VAR99_eGARCH,SNEUCX_train$VAR99_apARCH,SNEUCX_train$VAR99_sGARCH_M)
+          ,max(SNEUCX_train$VAR99_sGARCH,SNEUCX_train$VAR99_eGARCH,SNEUCX_train$VAR99_apARCH,SNEUCX_train$VAR99_sGARCH_M))
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR99_sGARCH,color = "VAR99_sGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_sGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_sGARCH]), fill = "red",alpha = 0.5, shape = 21) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR99_eGARCH, color = "VAR99_eGARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_eGARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_eGARCH]), color = "blue",alpha = 0.5, shape = 22) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR99_apARCH, color = "VAR99_apARCH"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_apARCH]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_apARCH]), color = "darkgreen",alpha = 0.5, shape = 23) +
+  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR99_sGARCH_M, color = "VAR99_sGARCH_M"), linewidth = 0.5, alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_sGARCH_M]),
+                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR99_sGARCH_M]), color = "purple",alpha = 0.5, shape = 24) +
+  theme_minimal() +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.0015,x=index(SNEUCX_train)[20],label="5th percentile",geom="label", size = 3, alpha = 0.7) +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.0015,x=index(SNEUCX_train)[20],label="1st percentile",geom="label", size = 3, alpha = 0.7) +
+  theme(legend.position="top") + 
+  scale_color_manual(name='',
+                     breaks = c('VAR99_sGARCH','VAR99_eGARCH','VAR99_apARCH', 'VAR99_sGARCH_M'),
+                     values = c('VAR99_sGARCH'='red','VAR99_eGARCH'='blue', 'VAR99_apARCH' = 'darkgreen', 'VAR99_sGARCH_M' = 'purple')
+                     ) +
+  ylim(scale) +
+  ylab("Log returns") +
+  xlab("Date") +
+  scale_x_date(date_labels = "%d %b %Y") +
+  ggtitle('Value at risk 99% in sample')
+```
 
 ```{r}
 summary_in_sample <-c()
@@ -84,107 +236,17 @@ for (i in c("sGARCH","eGARCH","apARCH","sGARCH_M")){
 }
 summary_in_sample <- as_tibble(summary_in_sample)
 colnames(summary_in_sample) <- c("model","n below VAR95","% below VAR95","n below VAR99","% below VAR99")
-summary_in_sample
 
-summary_in_sample %>% 
+summary_in_sample <- summary_in_sample %>% 
   datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
   formatPercentage(columns = c(3,5), digits = 2)
-
-rbind(summary_in_sample, c("historical percentile",sum(SNEUCX_train$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)), (sum(SNEUCX_train$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)))/length(SNEUCX_train$LnReturns),sum(SNEUCX_train$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)), (sum(SNEUCX_train$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)))/length(SNEUCX_train$LnReturns))) %>% 
-datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
-formatPercentage(columns = c(3,5), digits = 2)
 ```
 
+## Out of sample
 
-```{r}
-scale = c(min(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M)
-          ,max(SNEUCX_train$VAR95_sGARCH,SNEUCX_train$VAR95_eGARCH,SNEUCX_train$VAR95_apARCH,SNEUCX_train$VAR95_sGARCH_M))
+### Estimation of forecasts
 
-ggplot() +
-  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH,color = "VAR95_sGARCH"), linewidth = 0.5, alpha = 0.7) +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]),
-                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]), fill = "red",alpha = 0.5, shape = 1) +
-  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_eGARCH, color = "VAR95_eGARCH"), linewidth = 0.5, alpha = 0.7) +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]),
-                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]), color = "blue",alpha = 0.5, shape = 2) +
-  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_apARCH, color = "VAR95_apARCH"), linewidth = 0.5, alpha = 0.7) +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]),
-                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]), color = "black",alpha = 0.5, shape = 5) +
-  geom_line(aes(x=index(SNEUCX_train),y=SNEUCX_train$VAR95_sGARCH_M, color = "VAR95_sGARCH_M"), linewidth = 0.5, alpha = 0.7) +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]),
-                 y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]), color = "purple",alpha = 0.5, shape = 6) +
-  theme_minimal() +
-  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
-  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.0015,x=index(SNEUCX_train)[20],label="5th percentile",geom="label", size = 3, alpha = 0.7) +
-  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
-  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.0015,x=index(SNEUCX_train)[20],label="1st percentile",geom="label", size = 3, alpha = 0.7) +
-  theme(legend.position="top") + 
-  scale_color_manual(name='',
-                     breaks = c('VAR95_sGARCH','VAR95_eGARCH','VAR95_apARCH', 'VAR95_sGARCH_M'),
-                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'black', 'VAR95_sGARCH_M' = 'purple')
-                     ) +
-  ylim(scale) +
-  ylab("Log returns") +
-  xlab("Date") +
-  scale_x_date(date_labels = "%d %b %Y")
-```
-
-```{r}
-
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]
-),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH]), color = "red",alpha = 0.7) +
-  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_sGARCH), color = "darkred", alpha = 0.7) +
-  theme_minimal() +
-  ylim(c(min(SNEUCX_train$VAR95_sGARCH),0))
-
-print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH))
-print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH))/length(SNEUCX_train$LnReturns))
-index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH])
-```
-```{r}
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]
-),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH]), color = "red",alpha = 0.7) +
-  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_eGARCH), color = "darkred", alpha = 0.7) +
-  theme_minimal() +
-  ylim(c(min(SNEUCX_train$VAR95_eGARCH),0))
-
-print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH))
-print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH))/length(SNEUCX_train$LnReturns))
-index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_eGARCH])
-```
-```{r}
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]
-),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH]), color = "red",alpha = 0.7) +
-  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_apARCH), color = "darkred", alpha = 0.7) +
-  theme_minimal() +
-  ylim(c(min(SNEUCX_train$VAR95_apARCH),0))
-
-print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH))
-print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH))/length(SNEUCX_train$LnReturns))
-index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_apARCH])
-```
-
-```{r}
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]
-),y=SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M]), color = "red",alpha = 0.7) +
-  geom_line(aes(x=index(SNEUCX_train$LnReturns),y=SNEUCX_train$VAR95_sGARCH_M), color = "darkred", alpha = 0.7) +
-  theme_minimal() +
-  ylim(c(min(SNEUCX_train$VAR95_sGARCH_M),0))
-
-print(sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M))
-print((sum(SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M))/length(SNEUCX_train$LnReturns))
-index(SNEUCX_train$LnReturns[SNEUCX_train$LnReturns<SNEUCX_train$VAR95_sGARCH_M])
-```
-
-## Out-of-Sample
+#### Function for VAR forecast with expanding window
 
 ```{r}
 garch_forecast_expanding <- function(df,
@@ -225,11 +287,13 @@ garch_forecast_expanding <- function(df,
   out <- as_tibble(out)
   out$date <- as.Date(out$date)
   out <- as.xts(out[c("sigma","return", "q05","q01")], order.by = out$date)
-  out$var95 <- out$q05*out$sigma
+  out$VAR99 <- out$q05*out$sigma
   out$var99 <- out$q01*out$sigma
   return(out)
 }
 ```
+
+#### Forecasts
 
 ```{r}
 #time1 <- Sys.time()
@@ -284,67 +348,18 @@ apARCH_forecast <- readRDS("output/apARCH_forecast.rds")
 sGARCH_M_forecast <- readRDS("output/sGARCH_M_forecast.rds")
 ```
 
-```{r}
-model = sGARCH_forecast
-
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-), color = "red",alpha = 0.7) +
-  theme_minimal() +
-  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
-  ylim(c(min(model$var95),0))
-
-print(sum(SNEUCX_test$LnReturns<model$var95))
-index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
-```
-```{r}
-model = eGARCH_forecast
-
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-), color = "red",alpha = 0.7) +
-  theme_minimal() +
-  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
-  ylim(c(min(model$var95),0))
-
-print(sum(SNEUCX_test$LnReturns<model$var95))
-index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
-```
+### VaR 95 plot
 
 ```{r}
-model = apARCH_forecast
+p1 <- varplot(SNEUCX_test$LnReturns,sGARCH_forecast$var95,"sGARCH",5)
 
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-), color = "red",alpha = 0.7) +
-  theme_minimal() +
-  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
-  ylim(c(min(model$var95),0))
+p2 <- varplot(SNEUCX_test$LnReturns,eGARCH_forecast$var95,"eGARCH",5,'blue')
 
-print(sum(SNEUCX_test$LnReturns<model$var95))
-index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
-```
+p3 <- varplot(SNEUCX_test$LnReturns,apARCH_forecast$var95,"apARCH",5,'darkgreen')
 
-```{r}
-model = sGARCH_M_forecast
+p4 <- varplot(SNEUCX_test$LnReturns,sGARCH_M_forecast$var95,"sGARCH-M",5,'purple')
 
-ggplot() +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns),y=SNEUCX_test$LnReturns), color = "black") +
-  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-),y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<model$var95]
-), color = "red",alpha = 0.7) +
-  theme_minimal() +
-  geom_line(aes(x=index(model),y=model$var95), color = "darkred", alpha = 0.7) +
-  ylim(c(min(model$var95),0))
-
-print(sum(SNEUCX_test$LnReturns<model$var95))
-index(SNEUCX_test[SNEUCX_test$LnReturns<model$var95])
+(p1 | p2 ) / (p3 | p4) + plot_annotation(title = 'Value at risk 95% out of sample', caption = '5th percentile based on in sample data')
 ```
 
 ```{r}
@@ -359,9 +374,9 @@ ggplot() +
                  y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<sGARCH_forecast$var95]),
              color = "red",alpha = 1) +
   geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
-  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.002,x=index(SNEUCX_test)[7],label="5th percentile",geom="label", size = 3, alpha = 0.7) +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.002,x=index(SNEUCX_test)[18],label="5th percentile historical",geom="label", size = 3, alpha = 0.7) +
   geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
-  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.002,x=index(SNEUCX_test)[7],label="1st percentile",geom="label", size = 3, alpha = 0.7) +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.002,x=index(SNEUCX_test)[18],label="1st percentile historical",geom="label", size = 3, alpha = 0.7) +
   theme_minimal() +
   ylab("Log returns") +
   xlab("Date") +
@@ -369,9 +384,52 @@ ggplot() +
   theme(legend.position="top") + 
   scale_color_manual(name='',
                      breaks = c('VAR95_sGARCH','VAR95_eGARCH','VAR95_apARCH', 'VAR95_sGARCH_M'),
-                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'black', 'VAR95_sGARCH_M' = 'purple')
+                     values = c('VAR95_sGARCH'='red','VAR95_eGARCH'='blue', 'VAR95_apARCH' = 'darkgreen', 'VAR95_sGARCH_M' = 'purple')
                      ) +
-  ylim(scale)
+  ylim(scale) +
+  ggtitle('Value at risk 95% out of sample')
+```
+
+### VaR 99 plot
+
+```{r}
+p1 <- varplot(SNEUCX_test$LnReturns,sGARCH_forecast$var99,"sGARCH",1)
+
+p2 <- varplot(SNEUCX_test$LnReturns,eGARCH_forecast$var99,"eGARCH",1,'blue')
+
+p3 <- varplot(SNEUCX_test$LnReturns,apARCH_forecast$var99,"apARCH",1,'darkgreen')
+
+p4 <- varplot(SNEUCX_test$LnReturns,sGARCH_M_forecast$var99,"sGARCH-M",1,'purple')
+
+(p1 | p2 ) / (p3 | p4) + plot_annotation(title = 'Value at risk 99% out of sample', caption = '1st percentile based on in sample data')
+```
+
+```{r}
+scale <- c(min(sGARCH_forecast$var99,eGARCH_forecast$var99,apARCH_forecast$var99,sGARCH_M_forecast$var99),max(sGARCH_forecast$var99,eGARCH_forecast$var99,apARCH_forecast$var99,sGARCH_M_forecast$var99))
+
+ggplot() +
+  geom_line(aes(x=index(SNEUCX_test),y=sGARCH_forecast$var99, color = "VAR99_sGARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=eGARCH_forecast$var99, color = "VAR99_eGARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=apARCH_forecast$var99, color = "VAR99_apARCH"), alpha = 0.7) +
+  geom_line(aes(x=index(SNEUCX_test),y=sGARCH_M_forecast$var99, color = "VAR99_sGARCH_M"), alpha = 0.7) +
+  geom_point(aes(x=index(SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<sGARCH_forecast$var99]),
+                 y=SNEUCX_test$LnReturns[SNEUCX_test$LnReturns<sGARCH_forecast$var99]),
+             color = "red",alpha = 1) +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.05),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.05)-0.002,x=index(SNEUCX_test)[18],label="5th percentile historical",geom="label", size = 3, alpha = 0.7) +
+  geom_hline(yintercept = quantile(SNEUCX_train$LnReturns,0.01),linetype = "dashed") +
+  annotate(y=quantile(SNEUCX_train$LnReturns,0.01)-0.002,x=index(SNEUCX_test)[18],label="1st percentile historical",geom="label", size = 3, alpha = 0.7) +
+  theme_minimal() +
+  ylab("Log returns") +
+  xlab("Date") +
+  scale_x_date(date_labels = "%d %b %Y") +
+  theme(legend.position="top") + 
+  scale_color_manual(name='',
+                     breaks = c('VAR99_sGARCH','VAR99_eGARCH','VAR99_apARCH', 'VAR99_sGARCH_M'),
+                     values = c('VAR99_sGARCH'='red','VAR99_eGARCH'='blue', 'VAR99_apARCH' = 'darkgreen', 'VAR99_sGARCH_M' = 'purple')
+                     ) +
+  ylim(scale) +
+  ggtitle('Value at risk 95% out of sample')
 ```
 
 ```{r}
@@ -391,13 +449,41 @@ for (i in c("sGARCH","eGARCH","apARCH","sGARCH_M")){
 summary_out_of_sample <- as_tibble(summary_out_of_sample)
 colnames(summary_out_of_sample) <- c("model","n below VAR95","% below VAR95","n below VAR99","% below VAR99")
 
-rbind(summary_out_of_sample, c("historical percentile",sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)), (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)))/length(SNEUCX_test$LnReturns),sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)), (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)))/length(SNEUCX_test$LnReturns))) %>% 
+summary_out_of_sample <- rbind(summary_out_of_sample, 
+                               c("historical 5th and 1st percentile",
+                                 sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)),
+                                 (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)))/length(SNEUCX_test$LnReturns),
+                                 sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)),
+                                 (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)))/length(SNEUCX_test$LnReturns))
+                               ) %>% 
   datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
   formatPercentage(columns = c(3,5), digits = 2)
-
-#cbind(summary_in_sample,summary_out_of_sample[,c(2,3,4,5)]) %>% 
-#datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe') %>% 
-#  formatPercentage(columns = c(3,5,7,9), digits = 2)
-
-c(sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)), (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.05)))/length(SNEUCX_test$LnReturns),sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)), (sum(SNEUCX_test$LnReturns < quantile(SNEUCX_train$LnReturns,0.01)))/length(SNEUCX_test$LnReturns))
 ```
+
+# Summary
+## In sample
+```{r}
+summary_in_sample
+```
+
+Based on in sample data, results shows that the best performing model is eGARCH model, with 4.57% of observations falling below the VaR value, which is closest to the expected 5%. In case of VAR 99%, the best model is apARCH model, with 1.39% of observations below VAR value.
+
+## Out of sample
+```{r}
+summary_out_of_sample
+```
+
+All the GARCH-based models (sGARCH, eGARCH, apARCH, and sGARCH_M) performed identically, with 1.20% of observations falling below the VaR 95% value, which is less than the expected 5%. None of the models had any observations falling below the VaR 99% threshold. Using historical 5th percentile only 0.40% of observations were below the threshold, while the 1st percentile had no observations below the threshold.
+
+## Conclusions
+
+These results suggest that the VaRs calculated are overly conservative, likely due to a shift in the distribution. The use of quantiles based on an expanding window may not adequately account for dynamic changes in the data.
+
+Comparative quantiles:
+
+-   5th quantile from train data: `{r} round(quantile(SNEUCX_train[,'LnReturns'],0.05)*100,2)`% vs test data `{r} round(quantile(SNEUCX_test[,'LnReturns'],0.05)*100,2)`%
+-   1st quantile from train data: `{r} round(quantile(SNEUCX_train[,'LnReturns'],0.01)*100,2)`% vs test data `{r} round(quantile(SNEUCX_test[,'LnReturns'],0.01)*100,2)`%
+
+Overall, we can see that models with t-student distribution performed the best for training dataset in terms of volatility modeling (see notebook 03 GARCH modeling). This is likely due to the t-student distribution's heavier tails, which better capture the extreme movements of index composed of 5 chosen financial instruments. Models with asymmetric reaction to shocks performed better in VAR forecasting in in-sample period. This improved performance can be attributed to their ability to model the leverage effect, where negative shocks have a larger impact on volatility than positive shocks of the same magnitude.
+
+For further development forecasts on fixed timeframes (e.g. one year) could be tested. Using an expanding window for quantile estimation may not reflect recent changes in market conditions. Therefore, considering the use of rolling windows or other dynamic methods that adapt to the latest data could help capture the evolving distribution of returns and improve VaR accuracy.
