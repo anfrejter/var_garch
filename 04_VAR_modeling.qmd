@@ -461,7 +461,9 @@ summary_out_of_sample <- rbind(summary_out_of_sample,
 ```
 
 # Summary
+
 ## In sample
+
 ```{r}
 summary_in_sample
 ```
@@ -469,6 +471,7 @@ summary_in_sample
 Based on in sample data, results shows that the best performing model is eGARCH model, with 4.57% of observations falling below the VaR value, which is closest to the expected 5%. In case of VAR 99%, the best model is apARCH model, with 1.39% of observations below VAR value.
 
 ## Out of sample
+
 ```{r}
 summary_out_of_sample
 ```
@@ -486,4 +489,4 @@ Comparative quantiles:
 
 Overall, we can see that models with t-student distribution performed the best for training dataset in terms of volatility modeling (see notebook 03 GARCH modeling). This is likely due to the t-student distribution's heavier tails, which better capture the extreme movements of index composed of 5 chosen financial instruments. Models with asymmetric reaction to shocks performed better in VAR forecasting in in-sample period. This improved performance can be attributed to their ability to model the leverage effect, where negative shocks have a larger impact on volatility than positive shocks of the same magnitude.
 
-For further development forecasts on fixed timeframes (e.g. one year) could be tested. Using an expanding window for quantile estimation may not reflect recent changes in market conditions. Therefore, considering the use of rolling windows or other dynamic methods that adapt to the latest data could help capture the evolving distribution of returns and improve VaR accuracy.
+For further development forecasts on fixed time frames (e.g. one year) could be tested. Using an expanding window for quantile estimation may not reflect recent changes in market conditions. Therefore, considering the use of rolling windows or other dynamic methods that adapt to the latest data could help capture the evolving distribution of returns and improve VaR accuracy.

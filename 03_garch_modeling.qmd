@@ -66,7 +66,7 @@ ACF and PACF plots show that 7th and 10th lags are significant. This suggest ana
 
 ## Mean equation model
 
-We will choose models based on BIC criterion as it penalizes large number of parameters the most. We prefer parsimonious models that won't overfit. We fit models with p up to 10 and q up to 10. Some models will be defined manually as auto.arima doesn't take into consideration models, that have only for example 10th lag without lags from 1 to 9.
+We will choose models based on BIC criterion as it penalizes large number of parameters the most. We prefer parsimonious models that won't over fit. We fit models with p up to 10 and q up to 10. Some models will be defined manually as auto.arima doesn't take into consideration models, that have only for example 10th lag without lags from 1 to 9.
 
 ```{r}
 Akaike <-c()
@@ -207,7 +207,7 @@ testdf(variable = arma0_0$residuals,
   formatRound(columns = c('adf', 'p_adf', 'bgodfrey', 'p_bg'), digits = 4)
 ```
 
-Based on Breusch Godfrey test we cannot reject hypothesis that there is no autocorrelation among residuals for DF test with 0 augumentations. P-value for ADF test with zero augumentations is low - we can reject hupothesis that time series is non stationary. Residuals of ARIMA(0,0) is stationary.
+Based on Breusch Godfrey test we can not reject hypothesis that there is no autocorrelation among residuals for DF test with 0 augmentations. P-value for ADF test with zero augmentations is low - we can reject hypothesis that time series is non stationary. Residuals of ARIMA(0,0) is stationary.
 
 # ARCH effect
 
@@ -223,7 +223,7 @@ acf(SNEUCX_train$LnReturns^2,
     ylim = c(-0.05,0.2))
 ```
 
-Based on ACF os squared log returns/residuals of ARMA(0,0) we can see that serial autocorrelation is present which suggest ARCH effects.
+Based on ACF on squared log returns/residuals of ARMA(0,0) we can see that serial autocorrelation is present which suggest ARCH effects.
 
 ## ARCH test
 
@@ -262,13 +262,13 @@ Nyblom stability test suggest that jointly model is not stable - statistic is gr
 
 Additionally we reject the hypothesis that leverage effect exists.
 
-ACF plot of standarized residuals shows significant autocorrelation for 7th and 10th lag.
+ACF plot of standardized residuals shows significant autocorrelation for 7th and 10th lag.
 
-ACF plot od squared standarized residuals shows significant autocorrelation for 5th lag. We will add up to 5th lag of innovation to next model.
+ACF plot of squared standardized residuals shows significant autocorrelation for 5th lag. We will add up to 5th lag of innovation to next model.
 
 Based on Adjusted Pearson Goodness-of-Fit Test we can see that normal distribution does not fit the data.
 
-Standarized residuals don't have normal distribution.
+Standardized residuals don't have normal distribution.
 
 ## ARCH(5)
 
@@ -282,7 +282,7 @@ plot(ARCH5,which = 11)
 plot(ARCH5,which = 3)
 ```
 
-Now based on Weighted Ljung-Box Test on Standardized Squared Residuals auto-correlation is no longer present. Analyzing ACF plot for squared standarized residuals 9th lag became autocorrelated.
+Now based on Weighted Ljung-Box Test on Standardized Squared Residuals auto-correlation is no longer present. Analyzing ACF plot for squared standardized residuals 9th lag became autocorrelated.
 
 ARCH effect is present for 10th lag. We will proceed with ARCH9
 
@@ -300,7 +300,7 @@ plot(ARCH9,which = 11)
 plot(ARCH9,which = 3)
 ```
 
-Finally model seems to be correct in terms of autocorrelation of standarized squared residuals and arch effects. Autocorrelation based on ACF plot and Ljung-Box test are no longer significant. Additionally, investigating ACF plot of standarized residuals we can see that none of lags up. to 15th have statistically significant autocorrelation. ARCH of order 9 is quite a lot, we will try fitting ARCH models of order 1 to 9 without such detailed analysis.
+Finally model seems to be correct in terms of autocorrelation of standardized squared residuals and arch effects. Autocorrelation based on ACF plot and Ljung-Box test are no longer significant. Additionally, investigating ACF plot of standardized residuals we can see that none of lags up. to 15th have statistically significant autocorrelation. ARCH of order 9 is quite a lot, we will try fitting ARCH models of order 1 to 9 without such detailed analysis.
 
 ## Aditional models
 
@@ -334,21 +334,21 @@ plot(GARCH11, which = 9)
 
 Looking at the first table with optimal parameters we can see that now all parameters are statistically significant except for mu in mean equation.
 
-Ljung-box test on Standarized Residuals and the squared ones shows no autocorrelation within the residuals.
+Ljung-box test on Standardized Residuals and the squared ones shows no autocorrelation within the residuals.
 
 Based on Weighted ARCH LM test, ARCH effects are not present.
 
-Nyblom stavility test tells us that model parameters are jointly unstable, but looking at it individually, only omega is likely to change in time.
+Nyblom stability test tells us that model parameters are jointly unstable, but looking at it individually, only omega is likely to change in time.
 
 We reject the hypothesis that leverage effect is present.
 
-ACF plot of standarized residuals and standarized squared residuals shows no significant serial autocorrelation up to 20th lag.
+ACF plot of standardized residuals and standardized squared residuals shows no significant serial autocorrelation up to 20th lag.
 
 Based on Adjusted Pearson Goodness-of-Fit Test we can see that normal distribution does not fit the data, we will try with different distributions. By looking at qq plot we can see that marginal values lay significantly below/above solid line implying heavy tails.
 
-As leverage effect is present we will additionally try fitting EGARCH and APARCH (recommended in documentation) models which takes this issue into account. Since for all Jarque-Bera tests null hypothesis about normal distribution among standarized residuals was rejected, we will try working with distributions such as t-student, skewed t-student, generalized error, skewed generalized error, skewed normal.
+As leverage effect is present we will additionally try fitting EGARCH and APARCH (recommended in documentation) models which takes this issue into account. Since for all Jarque-Bera tests null hypothesis about normal distribution among standardized residuals was rejected, we will try working with distributions such as t-student, skewed t-student, generalized error, skewed generalized error, skewed normal.
 
-As an addition we will fit GARCH-in-Mean model, to see if including risk premium will enchance our model.
+As an addition we will fit GARCH-in-Mean model, to see if including risk premium will enhance our model.
 
 ```{r}
 garch_models = c("sGARCH","eGARCH","apARCH")
@@ -446,7 +446,7 @@ We will choose models based on Bayes information criterion, two models with the 
 
 -   exponential GARCH with t-student distribution of order (1,1).
 
-If we consider Akaike ans Shibata scores, the second best model is
+If we consider Akaike and Shibata scores, the second best model is
 
 -   asymmetric power ARCH model with t-student distribution or order (1,1)
 
@@ -505,7 +505,7 @@ Goodness-of-fit:
 
 -   t-Student distribution fits the data distribution
 
-Based on ACF of standardized residuals none of lags untill 15 is autocorrelated, based on ACF on squared tandardized residuals variance model is correct - no significant autocorrelation until 21 lag. News impact curve shows us that the impact of innovation on volatility is symmetric. QQ plot seems to be correct - t distribution matches data distribution.
+Based on ACF of standardized residuals none of lags until 15 is autocorrelated, based on ACF on squared standardized residuals variance model is correct - no significant autocorrelation until 21 lag. News impact curve shows us that the impact of innovation on volatility is symmetric. QQ plot seems to be correct - t distribution matches data distribution.
 
 ### EGARCH-t(1,1)
 
@@ -554,7 +554,7 @@ Goodness-of-fit:
 
 -   t-Student distribution fits the data distribution
 
-Based on ACF of standardized residuals none of lags untill 23 is autocorrelated, based on ACF on squared tandardized residuals variance model is correct - no significant autocorrelation until 21 lag, 5th lag is on the verge of the significance. News impact curve shows us that the impact of innovation on volatility is not symmetric - impact of negative innovation on volatility is higher than for positive innovations. QQ plot seems to be correct - t distribution matches data distribution.
+Based on ACF of standardized residuals none of lags until 23 is autocorrelated, based on ACF on squared standardized residuals variance model is correct - no significant autocorrelation until 21 lag, 5th lag is on the verge of the significance. News impact curve shows us that the impact of innovation on volatility is not symmetric - impact of negative innovation on volatility is higher than for positive innovations. QQ plot seems to be correct - t distribution matches data distribution.
 
 ### apARCH-t(1,1)
 
@@ -577,7 +577,7 @@ plot(apARCH_std_11, which = 9)
 
 Optimal parameters:
 
--   all the parameters are significant except for omega and mu (intercept of variance equation and mean equation). Leverage parameter, gamma is significant with positive estimate meaning that neagtive innovation has higher effect than positive innovations.
+-   all the parameters are significant except for omega and mu (intercept of variance equation and mean equation). Leverage parameter, gamma is significant with positive estimate meaning that negative innovation has higher effect than positive innovations.
 
 LB test:
 
@@ -603,7 +603,7 @@ Goodness-of-fit:
 
 -   t-Student distribution fits the data distribution
 
-Based on ACF of standardized residuals none of lags untill 15 is autocorrelated, based on ACF on squared tandardized residuals variance model is correct - no significant autocorrelation until 21 lag, 5th lag is on the verge of the significance. News impact curve shows us that the impact of innovation on volatility is not symmetric - impact of negative innovation on volatility is higher than for positive impacts. Compating to EGARCH we can see that New Impact Cruve is more convex. QQ plot seems to be correct - t distribution matches data distribution.
+Based on ACF of standardized residuals none of lags until 15 is autocorrelated, based on ACF on squared standardized residuals variance model is correct - no significant autocorrelation until 21 lag, 5th lag is on the verge of the significance. News impact curve shows us that the impact of innovation on volatility is not symmetric - impact of negative innovation on volatility is higher than for positive impacts. In comparison to EGARCH we can see that New Impact Curve is more convex. QQ plot seems to be correct -t-distribution matches data distribution.
 
 ### 
 
@@ -654,7 +654,7 @@ Goodness-of-fit:
 
 -   t-Student distribution fits the data distribution
 
-Based on ACF of standardized residuals none of lags untill 23 is autocorrelated, based on ACF on squared tandardized residuals variance model is correct - no significant autocorrelation until 21 lag. News impact curve shows us that the impact of innovation on volatility is symmetric. QQ plot seems to be correct - t distribution matches data distribution.
+Based on ACF of standardized residuals none of lags until 23 is autocorrelated, based on ACF on squared standardized residuals variance model is correct - no significant autocorrelation until 21 lag. News impact curve shows us that the impact of innovation on volatility is symmetric. QQ plot seems to be correct t-distribution matches data distribution.
 
 # Save models
 

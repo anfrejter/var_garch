@@ -68,7 +68,7 @@ merged |> summary()
 
 # Missing data
 
-We can notice that on holidays XRP - cryptocurrency is quoted/traded, but the rest is not. We could assume that we will have missing values for bank holidays (NVDA and SP500 US bank holidays). In such cases there is no change in price. Filling NANs with previous observations might affect our index by artificialy lowering our volatility. We decided not to model those days, our analysis will be performed only on actual trading days.
+We can notice that on holidays only XRP - cryptocurrency is quoted/traded, but the rest is not. We could assume that we will have missing values for bank holidays (NVDA and SP500 US bank holidays). In such cases there is no change in price. Filling NANs with previous observations might affect our index by artificially lowering our volatility. We decided not to model those days, our analysis will be performed only on actual trading days.
 
 ```{r}
 merged <- na.omit(merged)

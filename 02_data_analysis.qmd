@@ -65,6 +65,7 @@ p2 = ggplot(fortify(SNEUCX)) +
 
 p1 / p2
 ```
+
 # Distribution of data
 
 ## Histogram
@@ -90,7 +91,6 @@ tibble(r = as.numeric(SNEUCX$LnReturns)) %>%
   )
 ```
 
-
 ## Density
 
 ```{r}
@@ -107,8 +107,10 @@ ggplot(fortify(SNEUCX$LnReturns)) +
   theme_minimal() + 
   xlim(-0.15,0.15)
 ```
+
 ## Interpretation
-The analysis reveals that the distribution of the created index does not follow a normal distribution. The log returns are more concentrated around the average value, resulting in a higher peak at the mean. This leptokurtosis suggests a higher likelihood of outliers compared to a normal distribution. It indic heavy tails and a greater probability of extreme returns. This observation highlights the importance of accounting for potential risks and the variability in returns when evaluating investment performance.
+
+The analysis reveals that the distribution of the created index does not follow a normal distribution. The log returns are more concentrated around the average value, resulting in a higher peak at the mean. This leptokurtosis suggests a higher likelihood of outliers compared to a normal distribution. It indicates heavy tails and a greater probability of extreme returns. This observation highlights the importance of accounting for potential risks and the variability in returns when evaluating investment performance.
 
 # Quantiles
 
@@ -120,9 +122,9 @@ ggplot(fortify(SNEUCX$LnReturns)) +
   xlab('Theoretical Quantiles')
 ```
 
-## Heavy tails 
-The x-axis plots the theoretical quantiles. Those are the quantiles from the standard Normal distribution with mean 0 and standard deviation 1. Black points don't follow the red line. That means that heavy tails are present.
-It means that, compared to the normal distribution, there is much more data located at the extremes of the distribution and less data in the center of the distribution
+## Heavy tails
+
+The x-axis plots the theoretical quantiles. Those are the quantiles from the standard Normal distribution with mean 0 and standard deviation 1. Black points don't follow the red line. That means that heavy tails are present. It means that, compared to the normal distribution, there is much more data located at the extremes of the distribution and less data in the center of the distribution
 
 # Basic statistics
 
@@ -143,9 +145,10 @@ tibble(Statistics = colnames(ret_stats), SNEUCX_Log_Returns = as.numeric(ret_sta
   datatable(rownames = FALSE, options = list(dom = 't', ordering = FALSE), class = 'cell-border stripe', width = 10) %>% 
   formatRound(columns = c('SNEUCX_Log_Returns'), digits = 4)
 ```
+
 ## Interpretation
 
-Value of Kurtosis is equal to 11.75, which is grater than 3. That idicate=s that distribution odf data set does not follow normal distribution.
+Value of Kurtosis is equal to 11.75, which is grater than 3. That idicates that distribution of data set does not follow normal distribution.
 
 A skew of 0.8 indicates that the distribution is positively skewed, meaning it has a longer tail on the right side.
 
@@ -156,6 +159,7 @@ jarque.bera.test(SNEUCX$LnReturns)
 ```
 
 ## Interpretation
+
 In the context of the Jarque-Bera test, the null hypothesis (H0) is that the data follows a normal distribution.
 
 Since the p-value is significantly smaller than any conventional significance level (e.g., 0.05), we reject the null hypothesis. Therefore, the distribution of SNEUCX log returns does not follow a normal distribution.
